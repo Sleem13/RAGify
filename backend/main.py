@@ -234,7 +234,8 @@ async def chat(
         prompt = (
             "You are a professional AI assistant with access to uploaded documents.\n"
             "Answer the question using ONLY the context provided below.\n"
-            "If the answer is not in the context, say: 'I could not find this information in the uploaded documents.'\n\n"
+            "If the answer is not in the context, say: 'I could not find this information in the uploaded documents.'\n"
+            "IMPORTANT: Always answer in the exact same language as the user's QUESTION (e.g., if the question is in Arabic, answer in Arabic).\n\n"
             f"CONTEXT:\n{context}\n\n"
             f"QUESTION: {message}\n\n"
             "ANSWER:"
@@ -243,7 +244,8 @@ async def chat(
         prompt = (
             "You are a professional AI assistant.\n"
             "No documents have been indexed yet. Answer using your general knowledge.\n"
-            "Remind the user they can upload PDF, DOCX, or Excel files for document-specific answers.\n\n"
+            "Remind the user they can upload PDF, DOCX, or Excel files for document-specific answers.\n"
+            "IMPORTANT: Always answer in the exact same language as the user's QUESTION (e.g., if the question is in Arabic, answer in Arabic).\n\n"
             f"QUESTION: {message}\n\n"
             "ANSWER:"
         )
