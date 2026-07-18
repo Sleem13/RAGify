@@ -1,20 +1,32 @@
-# 1. بنحدد الصورة الأساسية (نسخة بايثون خفيفة وسريعة)
-FROM python:3.10-slim
+# Use a lightweight Python image
+FROM python:3.11-slim
 
-# 2. بنحدد مكان الشغل جوه السيرفر اللي هيتعمل
+# Prevent Python from creating .pyc files
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Ensure logs are printed immediately
+ENV PYTHONUNBUFFERED=1
+
+# Working directory
 WORKDIR /app
 
-# 3. بننسخ ملف المكتبات الأول علشان نسطبها
+# Install system packages if needed
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first (for Docker cache)
 COPY requirements.txt .
 
-# 4. بنسطب المكتبات جوه السيرفر
+# Install Python dependencies
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. بننسخ باقي كود الباك إند كله جوه السيرفر
+# Copy project files
 COPY . .
 
-# 6. دي أهم خطوة لـ Hugging Face.. بنفتح بورت 7860
-EXPOSE 7860
+# Default port
+EXPOSE 8000
 
-# 7. الأمر النهائي اللي بيشغل السيرفر (لاحظ تغيير البورت لـ 7860)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Start FastAPI
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
