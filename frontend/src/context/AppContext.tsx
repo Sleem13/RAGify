@@ -75,6 +75,16 @@ const translations = {
     askAnything: "Ask me anything about your files...",
     localtunnelUrl: "Localtunnel Backend URL",
     leaveEmpty: "Leave empty to use default local server (localhost:9999).",
+    // API Key
+    generateApiKey: "Generate API Key",
+    apiKeyTitle: "Developer API Key",
+    apiKeyDesc: "Share this key with developers to integrate RAGify into their own projects.",
+    generateKey: "Generate New Key",
+    copyKey: "Copy Key",
+    copied: "Copied!",
+    apiKeyUsage: 'Use this key in the X-Api-Key header for all API requests.',
+    // Reset
+    resetMemory: "Reset Knowledge Base",
     // Analytics
     analyticsDashboard: "Analytics Dashboard",
     downloadReport: "Download Report",
@@ -147,6 +157,16 @@ const translations = {
     askAnything: "اسألني أي شيء عن ملفاتك...",
     localtunnelUrl: "رابط سيرفر Localtunnel",
     leaveEmpty: "اتركه فارغاً لاستخدام السيرفر المحلي (localhost:9999).",
+    // API Key
+    generateApiKey: "توليد مفتاح API",
+    apiKeyTitle: "مفتاح API للمطورين",
+    apiKeyDesc: "شارك هذا المفتاح مع المطورين لدمج RAGify في مشاريعهم الخاصة.",
+    generateKey: "توليد مفتاح جديد",
+    copyKey: "نسخ المفتاح",
+    copied: "تم النسخ!",
+    apiKeyUsage: "استخدم هذا المفتاح في header الـ X-Api-Key مع كل طلب API.",
+    // Reset
+    resetMemory: "مسح قاعدة المعرفة",
     // Analytics
     analyticsDashboard: "لوحة التحليلات",
     downloadReport: "تحميل التقرير",

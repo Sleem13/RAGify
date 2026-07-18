@@ -35,3 +35,5 @@ Thumbs.db
 # ── Vector DB local cache (if any) ───────────────────────────────────────────
 chroma_db/
 *.pkl
+vectorstore/
+*.faiss
