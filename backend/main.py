@@ -187,7 +187,7 @@ async def upload_file(
         status_code=415,
         detail=(
             f"Unsupported file type '{ext}'. "
-            "Supported: PDF, DOCX, TXT, XLSX, XLS, CSV."
+            "Supported: PDF, DOCX, TXT, PPTX, PNG, JPG, JPEG, XLSX, XLS, CSV."
         ),
     )
 

@@ -156,7 +156,7 @@ export default function Dashboard() {
               type="file"
               className="hidden"
               id="fileInput"
-              accept=".pdf,.xlsx,.xls,.csv,.docx,.txt"
+              accept=".pdf,.xlsx,.xls,.csv,.docx,.txt,.pptx,.png,.jpg,.jpeg"
               onChange={(e) => e.target.files && setFile(e.target.files[0])}
             />
             <label htmlFor="fileInput" className="cursor-pointer flex flex-col items-center">
@@ -164,7 +164,7 @@ export default function Dashboard() {
               <p className="text-gray-600 dark:text-gray-300 font-medium text-sm">
                 {file ? file.name : t('clickToSelect')}
               </p>
-              <p className="text-gray-400 text-xs mt-2">PDF, DOCX, TXT, XLSX, CSV</p>
+              <p className="text-gray-400 text-xs mt-2 text-center">PDF, DOCX, PPTX, TXT, Excel, Images</p>
             </label>
             <button
               onClick={handleUpload}

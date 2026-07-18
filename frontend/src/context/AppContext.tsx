@@ -67,7 +67,7 @@ const translations = {
     // Dashboard
     uploadFiles: "Upload Files",
     clickToSelect: "Click to select a file",
-    supportsFormats: "Supports PDF, Excel (.xlsx, .xls)",
+    supportsFormats: "Supports PDF, DOCX, PPTX, TXT, Excel, Images",
     processFile: "Process File",
     processing: "Processing...",
     viewAnalytics: "View Analytics Dashboard",
@@ -149,7 +149,7 @@ const translations = {
     // Dashboard
     uploadFiles: "رفع الملفات",
     clickToSelect: "انقر لاختيار ملف",
-    supportsFormats: "يدعم PDF, Excel (.xlsx, .xls)",
+    supportsFormats: "يدعم PDF, DOCX, PPTX, TXT, Excel, الصور",
     processFile: "معالجة الملف",
     processing: "جاري المعالجة...",
     viewAnalytics: "عرض لوحة التحليلات",
