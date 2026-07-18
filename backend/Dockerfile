@@ -1,9 +1,6 @@
-FROM python:3.11-slim
+FROM python:3.11
 
 WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y gcc libffi-dev && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user (Hugging Face Spaces requirement)
 RUN useradd -m -u 1000 user
