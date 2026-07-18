@@ -37,3 +37,9 @@ chroma_db/
 *.pkl
 vectorstore/
 *.faiss
+
+# ── Binary executables & tools (never commit) ─────────────────────────────────
+*.exe
+*.bin
+cloudflared*
+run-commend.txt
