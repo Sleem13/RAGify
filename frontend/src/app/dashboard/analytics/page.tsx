@@ -44,7 +44,7 @@ export default function AnalyticsDashboard() {
     return custom.trim() || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9999';
   };
 
-  const handleExport = async (format: 'json' | 'csv' | 'xlsx') => {
+  const handleExport = async (format: 'json' | 'csv' | 'xlsx' | 'pdf') => {
     if (!analysis) return;
     setExportLoading(true);
     setShowExportMenu(false);
@@ -145,6 +145,12 @@ export default function AnalyticsDashboard() {
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-slate-800 dark:text-white text-sm font-medium border-t border-gray-100 dark:border-white/5"
                 >
                   <FileSpreadsheet className="w-5 h-5 text-indigo-500" /> Excel (.xlsx)
+                </button>
+                <button
+                  onClick={() => handleExport('pdf')}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-slate-800 dark:text-white text-sm font-medium border-t border-gray-100 dark:border-white/5"
+                >
+                  <FileText className="w-5 h-5 text-red-500" /> PDF Document
                 </button>
               </div>
             )}

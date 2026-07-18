@@ -385,8 +385,53 @@ async def export_data(
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": "attachment; filename=ragify_export.xlsx"},
         )
+    # ── PDF export ───────────────────────────────────────────────────────────
+    if fmt == "pdf":
+        try:
+            from fpdf import FPDF
+        except ImportError:
+            raise HTTPException(status_code=500, detail="fpdf2 not installed.")
 
-    raise HTTPException(status_code=400, detail=f"Unknown format '{fmt}'. Use: json, csv, xlsx.")
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Helvetica", size=12)
+
+        summary = parsed.get("summary", {})
+        columns = summary.get("columns", [])
+
+        pdf.set_font("Helvetica", style="B", size=16)
+        pdf.cell(200, 10, txt="RAGify Analytics Export", ln=1, align="C")
+        pdf.ln(10)
+
+        pdf.set_font("Helvetica", style="B", size=12)
+        pdf.cell(200, 10, txt="Summary Metrics", ln=1)
+        pdf.set_font("Helvetica", size=12)
+        pdf.cell(200, 10, txt=f"Total Rows: {summary.get('rows_count', 'N/A')}", ln=1)
+        pdf.cell(200, 10, txt=f"Total Columns: {len(columns)}", ln=1)
+        pdf.ln(5)
+
+        pdf.set_font("Helvetica", style="B", size=12)
+        pdf.cell(200, 10, txt="Insights", ln=1)
+        pdf.set_font("Helvetica", size=12)
+        # multi_cell handles line wrapping automatically
+        pdf.multi_cell(0, 10, txt=parsed.get("insights", ""))
+        pdf.ln(5)
+
+        pdf.set_font("Helvetica", style="B", size=12)
+        pdf.cell(200, 10, txt="Detected Columns", ln=1)
+        pdf.set_font("Helvetica", size=12)
+        pdf.multi_cell(0, 10, txt=", ".join(columns))
+
+        content = pdf.output()
+        buffer = io.BytesIO(content)
+        buffer.seek(0)
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=ragify_export.pdf"},
+        )
+
+    raise HTTPException(status_code=400, detail=f"Unknown format '{fmt}'. Use: json, csv, xlsx, pdf.")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
