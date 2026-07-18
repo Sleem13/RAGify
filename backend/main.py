@@ -26,14 +26,11 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS: Allow Vercel frontend + localhost
-frontend_url = os.getenv("FRONTEND_URL", "*")
-origins = [frontend_url] if frontend_url != "*" else ["*"]
-
+# CORS: Allow all origins (needed for GitHub Codespaces + Vercel)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
