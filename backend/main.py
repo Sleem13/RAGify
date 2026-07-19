@@ -227,22 +227,22 @@ async def chat(
     # ── Build prompt ──────────────────────────────────────────────────────────
     if context:
         prompt = (
-            "أنت مساعد ذكي ومحلل بيانات للشركات الكبرى. \n"
-            "مهمتك الأساسية هي الإجابة فقط وبشكل حصري من (النصوص أو الجداول أو الصور) الموجودة في السياق المرفق أدناه.\n"
-            "قواعد صارمة جداً:\n"
-            "1. لا تخترع أي معلومة إطلاقاً من خارج السياق المرفق.\n"
-            "2. إذا سألك المستخدم عن معلومة ولم تجدها في السياق، يجب أن ترد حصرياً بـ: 'عذراً، بناءً على الملفات المرفوعة، هذه المعلومة غير متوفرة.'\n"
-            "3. إذا كانت الإجابة موجودة، قم بصياغتها بشكل احترافي، منظم، ودقيق.\n"
-            "4. يجب أن ترد دائماً باللغة العربية، إلا إذا طلب المستخدم لغة أخرى صراحة.\n\n"
+            "You are a professional Enterprise AI Assistant and Data Analyst. \n"
+            "Your main task is to answer questions based ONLY on the provided context (texts, tables, or images).\n"
+            "STRICT RULES:\n"
+            "1. NEVER hallucinate or invent information outside the context.\n"
+            "2. If the answer is not in the context, say exactly: 'I am sorry, but based on the uploaded files, this information is not available.'\n"
+            "3. MUST RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S QUESTION. If the user writes in Arabic, reply in Arabic. If English, reply in English. Match their language perfectly.\n"
+            "4. AGENTIC ACTIONS: If the user specifically asks you to 'create a dashboard', 'analyze data', or 'generate a report' based on the data, you MUST include the exact token `[ACTION: GENERATE_DASHBOARD]` somewhere in your response.\n\n"
             f"CONTEXT:\n{context}\n\n"
             f"QUESTION: {message}\n\n"
             "ANSWER:"
         )
     else:
         prompt = (
-            "أنت مساعد ذكي للشركات الكبرى. \n"
-            "لم يتم رفع أي ملفات أو بيانات بعد. أجب بناءً على معرفتك العامة، وذكر المستخدم بلطف أنه يمكنه رفع ملفات (PDF, Excel, Word, الصور) وسؤالي عنها لكي أقدم له تحليلاً دقيقاً.\n"
-            "يجب أن ترد دائماً باللغة العربية، إلا إذا طلب المستخدم لغة أخرى.\n\n"
+            "You are a professional Enterprise AI Assistant.\n"
+            "No files have been uploaded yet. Answer based on your general knowledge, but politely remind the user that they can upload (PDF, Excel, Word, Images) for detailed analysis.\n"
+            "MUST RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S QUESTION. Match their language perfectly.\n\n"
             f"QUESTION: {message}\n\n"
             "ANSWER:"
         )
@@ -250,7 +250,16 @@ async def chat(
     # ── Generate response ─────────────────────────────────────────────────────
     try:
         response_text = await llm_manager.generate_response(prompt)
-        return {"response": response_text, "context_found": bool(context)}
+        
+        # Intercept Agent Actions
+        action = None
+        if "[ACTION: GENERATE_DASHBOARD]" in response_text:
+            action = "GENERATE_DASHBOARD"
+            response_text = response_text.replace("[ACTION: GENERATE_DASHBOARD]", "").strip()
+            if not response_text:
+                response_text = "I have analyzed the data and generated your dashboard. Click the button below to view it."
+
+        return {"response": response_text, "context_found": bool(context), "action": action}
     except RuntimeError as exc:
         return {
             "response": (
