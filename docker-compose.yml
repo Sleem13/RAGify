@@ -12,6 +12,7 @@ services:
       - FRONTEND_URL=*
     volumes:
       - ragify_data:/home/user/app/data
+      - ragify_vectorstore:/home/user/app/vectorstore
     restart: unless-stopped
 
   frontend:
@@ -30,3 +31,4 @@ services:
 
 volumes:
   ragify_data:
+  ragify_vectorstore:

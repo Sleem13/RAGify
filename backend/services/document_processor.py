@@ -180,5 +180,87 @@ class DocumentProcessor:
         ext = os.path.splitext(filename)[1].lower()
         return ext in SUPPORTED_EXTENSIONS or ext in IMAGE_EXTENSIONS or ext in PPT_EXTENSIONS or ext in PDF_EXTENSIONS
 
+    async def process_excel_for_rag(self, file_bytes: bytes, filename: str):
+        """
+        Convert Excel/CSV data into text chunks for FAISS indexing.
+        Enables Q&A over tabular data (e.g., 'What is the highest sale?')
+        """
+        import pandas as pd
+        import tempfile
+
+        ext = os.path.splitext(filename)[1].lower()
+        temp_file_path = None
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            tmp.write(file_bytes)
+            temp_file_path = tmp.name
+
+        try:
+            if ext == ".csv":
+                df = pd.read_csv(temp_file_path, encoding="utf-8", on_bad_lines="skip")
+            elif ext == ".json":
+                df = pd.read_json(temp_file_path)
+            elif ext == ".xls":
+                df = pd.read_excel(temp_file_path, engine="xlrd")
+            else:
+                df = pd.read_excel(temp_file_path, engine="openpyxl")
+
+            df = df.where(pd.notnull(df), None)
+            documents = []
+
+            # Create a text summary of the entire dataset
+            columns = list(df.columns)
+            numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+
+            overview = (
+                f"File: {filename}\n"
+                f"Total rows: {len(df)}\n"
+                f"Columns: {', '.join(columns)}\n"
+            )
+            if numeric_cols:
+                stats = df[numeric_cols].describe().to_string()
+                overview += f"\nStatistical Summary:\n{stats}\n"
+
+            documents.append(Document(
+                page_content=overview,
+                metadata={"source": filename, "chunk_type": "overview"}
+            ))
+
+            # Create chunks of rows (every 20 rows = 1 chunk)
+            chunk_size = 20
+            for start in range(0, len(df), chunk_size):
+                chunk_df = df.iloc[start:start + chunk_size]
+                chunk_text = f"Data from '{filename}' (rows {start+1} to {start+len(chunk_df)}):\n"
+                chunk_text += chunk_df.to_string(index=False)
+                documents.append(Document(
+                    page_content=chunk_text,
+                    metadata={"source": filename, "chunk_type": "data_rows", "row_start": start}
+                ))
+
+            # Create summary stats per column
+            for col in numeric_cols:
+                col_stats = (
+                    f"Column '{col}' statistics from '{filename}':\n"
+                    f"  Min: {df[col].min():.2f}\n"
+                    f"  Max: {df[col].max():.2f}\n"
+                    f"  Average: {df[col].mean():.2f}\n"
+                    f"  Sum: {df[col].sum():.2f}\n"
+                    f"  Median: {df[col].median():.2f}\n"
+                )
+                documents.append(Document(
+                    page_content=col_stats,
+                    metadata={"source": filename, "chunk_type": "column_stats", "column": col}
+                ))
+
+            logger.info(f"Excel '{filename}' converted to {len(documents)} RAG chunks.")
+            return documents
+
+        except Exception as exc:
+            logger.error(f"Failed to convert Excel to RAG: {exc}")
+            return []
+        finally:
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+
 # Singleton
 document_processor = DocumentProcessor()

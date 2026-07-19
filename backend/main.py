@@ -8,6 +8,7 @@ import csv
 import json
 import secrets
 import logging
+from typing import List, Optional
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -21,12 +22,11 @@ from services.data_analyzer import data_analyzer
 app = FastAPI(
     title="RAGify API",
     description="AI-powered document analysis and retrieval system. Upload files, ask questions, get insights.",
-    version="2.0.0",
+    version="3.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# CORS: Allow all origins (needed for GitHub Codespaces + Vercel)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,18 +35,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Supported file types ─────────────────────────────────────────────────────
-EXCEL_EXTENSIONS = {".xlsx", ".xls", ".csv"}
+EXCEL_EXTENSIONS = {".xlsx", ".xls", ".csv", ".json"}
 
-# ─── Simple in-memory API key store (persists while server is running) ────────
-# In production, store these in a database
+# ─── In-memory stores ─────────────────────────────────────────────────────────
 _api_keys: set[str] = set()
+# Track uploaded files: {filename: {"type": "document"|"excel", "chunks": int}}
+_uploaded_files: dict = {}
 
 
 def _verify_api_key(x_api_key: str | None) -> bool:
-    """Returns True if the key is valid OR if no keys have been generated yet."""
     if not _api_keys:
-        return True  # Open mode: no key required until first key is generated
+        return True
     return x_api_key in _api_keys
 
 
@@ -56,13 +55,12 @@ def _verify_api_key(x_api_key: str | None) -> bool:
 
 @app.get("/", tags=["System"])
 def health_check():
-    """Health check — returns status and loaded LLM models."""
     return {
         "status": "healthy",
         "app": "RAGify API",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "loaded_models": llm_manager.available_models,
-        "api_key_required": len(_api_keys) > 0,
+        "indexed_files": len(_uploaded_files),
         "docs": "/docs",
     }
 
@@ -73,41 +71,45 @@ def health_check():
 
 @app.post("/generate-api-key", tags=["API Key"])
 def generate_api_key():
-    """
-    Generate a new API key for programmatic access.
-    Share this key with developers who want to integrate RAGify into their own projects.
-    """
     new_key = "ragify-" + secrets.token_urlsafe(32)
     _api_keys.add(new_key)
-    logger.info(f"New API key generated. Total keys: {len(_api_keys)}")
     return {
         "api_key": new_key,
         "message": "Keep this key safe. Use it in the 'X-Api-Key' header for all API requests.",
-        "example": {
-            "curl": f'curl -X POST https://ragify-backend.loca.lt/chat -H "X-Api-Key: {new_key}" -F "message=What is in my document?"',
-            "python": (
-                "import requests\n"
-                f'headers = {{"X-Api-Key": "{new_key}"}}\n'
-                'requests.post("https://ragify-backend.loca.lt/chat", headers=headers, data={"message": "Hello"})'
-            )
-        }
     }
 
 
 @app.get("/list-api-keys", tags=["API Key"])
 def list_api_keys():
-    """List all active API keys (masked for security)."""
     masked = [k[:12] + "..." + k[-4:] for k in _api_keys]
     return {"active_keys": masked, "total": len(_api_keys)}
 
 
 @app.delete("/revoke-api-key", tags=["API Key"])
 def revoke_api_key(api_key: str):
-    """Revoke an existing API key."""
     if api_key in _api_keys:
         _api_keys.discard(api_key)
         return {"message": "API key revoked successfully."}
     raise HTTPException(status_code=404, detail="API key not found.")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  FILE MANAGEMENT
+# ═════════════════════════════════════════════════════════════════════════════
+
+@app.get("/files", tags=["Documents"])
+def list_files():
+    """List all currently indexed files."""
+    return {"files": _uploaded_files, "total": len(_uploaded_files)}
+
+
+@app.delete("/files/{filename}", tags=["Documents"])
+def delete_file(filename: str):
+    """Remove a specific file from the registry (note: does not remove from FAISS — use /reset for full wipe)."""
+    if filename in _uploaded_files:
+        del _uploaded_files[filename]
+        return {"message": f"✅ '{filename}' removed from registry."}
+    raise HTTPException(status_code=404, detail=f"File '{filename}' not found in registry.")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -120,17 +122,40 @@ async def upload_file(
     x_api_key: str | None = Header(default=None),
 ):
     """
-    Upload and process any supported file:
-    - **PDF, DOCX, TXT** → Chunked, embedded, stored in local FAISS vector DB (RAG pipeline)
-    - **XLSX, XLS, CSV** → Analyzed with Pandas → returns Chart.js-ready JSON for the dashboard
-
-    Supports multiple files — each upload **merges** into the existing knowledge base.
+    Upload and process any supported file.
+    - PDF, DOCX, TXT, PPTX, Images → RAG pipeline (indexed in FAISS for Q&A)
+    - XLSX, XLS, CSV → Dual pipeline: analyzed with Pandas AND indexed in FAISS for Q&A
     """
-    # No API key check for demo purposes
-
     filename = file.filename or "unknown"
     ext = os.path.splitext(filename)[1].lower()
     contents = await file.read()
+
+    # ── Excel / CSV / JSON files → DUAL pipeline (analytics + RAG) ───────────
+    if ext in EXCEL_EXTENSIONS:
+        # 1. Analytics pipeline
+        try:
+            analysis = await data_analyzer.analyze_excel(contents, filename)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Analysis error: {exc}")
+
+        # 2. Also index the data into FAISS for Q&A
+        try:
+            chunks = await document_processor.process_excel_for_rag(contents, filename)
+            if chunks:
+                vector_db.add_chunks(chunks, filename=filename)
+                logger.info(f"Excel '{filename}' also indexed in FAISS with {len(chunks)} chunks.")
+        except Exception as exc:
+            logger.warning(f"Could not index Excel in FAISS: {exc}")
+
+        _uploaded_files[filename] = {"type": "excel", "chunks": len(analysis.get("charts", []))}
+
+        return {
+            "filename": filename,
+            "status": "analyzed",
+            "type": "excel",
+            "analysis": analysis,
+            "message": f"✅ '{filename}' analyzed and indexed. You can now ask questions about this data AND view the dashboard.",
+        }
 
     # ── Document files (RAG pipeline) ────────────────────────────────────────
     if document_processor.is_supported(filename):
@@ -142,18 +167,18 @@ async def upload_file(
             raise HTTPException(status_code=500, detail=f"Processing error: {exc}")
 
         vector_db.add_chunks(chunks, filename=filename)
+        _uploaded_files[filename] = {"type": "document", "chunks": len(chunks)}
 
+        # Generate a smart summary after indexing
         prompt = (
-            f"I just uploaded a document named '{filename}' with {len(chunks)} text chunks. "
-            "Acknowledge it in one professional sentence and confirm you are ready for questions."
+            f"A document named '{filename}' was just uploaded and indexed with {len(chunks)} text chunks.\n"
+            "In 2-3 sentences, acknowledge this professionally and mention you are ready for questions.\n"
+            "MUST respond in English."
         )
         try:
             summary = await llm_manager.generate_response(prompt)
         except Exception:
-            summary = (
-                f"✅ '{filename}' has been indexed ({len(chunks)} chunks). "
-                "Ask me anything about it!"
-            )
+            summary = f"✅ '{filename}' has been indexed ({len(chunks)} chunks). Ask me anything about it!"
 
         return {
             "filename": filename,
@@ -163,52 +188,36 @@ async def upload_file(
             "message": summary,
         }
 
-    # ── Excel / CSV files (analytics pipeline) ───────────────────────────────
-    if ext in EXCEL_EXTENSIONS:
-        try:
-            analysis = await data_analyzer.analyze_excel(contents, filename)
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"Analysis error: {exc}")
-
-        return {
-            "filename": filename,
-            "status": "analyzed",
-            "type": "excel",
-            "analysis": analysis,
-            "message": "✅ Excel data analyzed. Visit the Analytics Dashboard to explore your data.",
-        }
-
-    # ── Unsupported ───────────────────────────────────────────────────────────
     raise HTTPException(
         status_code=415,
-        detail=(
-            f"Unsupported file type '{ext}'. "
-            "Supported: PDF, DOCX, TXT, PPTX, PNG, JPG, JPEG, XLSX, XLS, CSV."
-        ),
+        detail=f"Unsupported file type '{ext}'. Supported: PDF, DOCX, TXT, PPTX, PNG, JPG, JPEG, XLSX, XLS, CSV.",
     )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-#  CHAT (RAG)
+#  CHAT (RAG + Conversation Memory + Agentic Actions)
 # ═════════════════════════════════════════════════════════════════════════════
 
 @app.post("/chat", tags=["Chat"])
 async def chat(
     message: str = Form(...),
+    history: str = Form(default="[]"),
     x_api_key: str | None = Header(default=None),
 ):
     """
-    RAG Chat endpoint.
-    1. Embeds the question and retrieves the top-5 most relevant chunks from FAISS.
-    2. Sends context + question to the active LLM (auto-fallback across all providers).
-    3. Returns the generated answer.
-
-    Works across ALL uploaded documents simultaneously — no need to specify which file.
+    RAG Chat endpoint with conversation memory.
+    Accepts `history` as a JSON array of [{role, content}] for context continuity.
     """
-    # No API key check for demo purposes
-
     if not message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
+
+    # ── Parse conversation history ─────────────────────────────────────────────
+    try:
+        chat_history: List[dict] = json.loads(history)
+        # Keep only last 8 exchanges to avoid token overflow
+        chat_history = chat_history[-16:]
+    except Exception:
+        chat_history = []
 
     # ── Retrieve context from FAISS Vector DB ─────────────────────────────────
     context = ""
@@ -222,50 +231,68 @@ async def chat(
             ]
             context = "\n\n---\n\n".join(context_texts)
     except Exception as exc:
-        logger.warning(f"Vector DB query failed (answering without context): {exc}")
+        logger.warning(f"Vector DB query failed: {exc}")
+
+    # ── Build conversation history string ──────────────────────────────────────
+    history_str = ""
+    if chat_history:
+        history_str = "CONVERSATION HISTORY (for context continuity):\n"
+        for turn in chat_history:
+            role = "User" if turn.get("role") == "user" else "Assistant"
+            history_str += f"{role}: {turn.get('content', '')}\n"
+        history_str += "\n"
 
     # ── Build prompt ──────────────────────────────────────────────────────────
+    indexed_files_list = ", ".join(_uploaded_files.keys()) if _uploaded_files else "none"
+
     if context:
         prompt = (
-            "You are a professional Enterprise AI Assistant and Data Analyst. \n"
-            "Your main task is to answer questions based ONLY on the provided context (texts, tables, or images).\n"
+            "You are a professional Enterprise AI Assistant, Data Analyst, and intelligent agent.\n"
+            f"Currently indexed files: {indexed_files_list}\n\n"
             "STRICT RULES:\n"
-            "1. NEVER hallucinate or invent information outside the context.\n"
-            "2. If the answer is not in the context, say exactly: 'I am sorry, but based on the uploaded files, this information is not available.'\n"
-            "3. MUST RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S QUESTION. If the user writes in Arabic, reply in Arabic. If English, reply in English. Match their language perfectly.\n"
-            "4. AGENTIC ACTIONS: If the user specifically asks you to 'create a dashboard', 'analyze data', or 'generate a report' based on the data, you MUST include the exact token `[ACTION: GENERATE_DASHBOARD]` somewhere in your response.\n\n"
-            f"CONTEXT:\n{context}\n\n"
-            f"QUESTION: {message}\n\n"
+            "1. Answer based ONLY on the CONTEXT below. Never invent facts.\n"
+            "2. If the answer is NOT in the context, say: 'Based on the uploaded files, I could not find this information.'\n"
+            "3. RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S CURRENT QUESTION.\n"
+            "4. Use the CONVERSATION HISTORY to understand follow-up questions and maintain context.\n"
+            "5. AGENTIC ACTIONS: If the user asks to 'create a dashboard', 'visualize data', 'show chart', or 'generate a report', include the token `[ACTION: GENERATE_DASHBOARD]` in your response.\n"
+            "6. Format answers with clear structure (bullet points, sections) when appropriate.\n\n"
+            f"{history_str}"
+            f"CONTEXT FROM DOCUMENTS:\n{context}\n\n"
+            f"USER QUESTION: {message}\n\n"
             "ANSWER:"
         )
     else:
+        if _uploaded_files:
+            no_context_note = f"Files are indexed ({indexed_files_list}) but no relevant context was found for this question."
+        else:
+            no_context_note = "No files have been uploaded yet."
+
         prompt = (
             "You are a professional Enterprise AI Assistant.\n"
-            "No files have been uploaded yet. Answer based on your general knowledge, but politely remind the user that they can upload (PDF, Excel, Word, Images) for detailed analysis.\n"
-            "MUST RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S QUESTION. Match their language perfectly.\n\n"
-            f"QUESTION: {message}\n\n"
+            f"{no_context_note} Answer based on general knowledge if appropriate.\n"
+            "Politely remind the user they can upload files (PDF, Excel, Word, Images, CSV) for precise analysis.\n"
+            "RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S QUESTION.\n\n"
+            f"{history_str}"
+            f"USER QUESTION: {message}\n\n"
             "ANSWER:"
         )
 
     # ── Generate response ─────────────────────────────────────────────────────
     try:
         response_text = await llm_manager.generate_response(prompt)
-        
+
         # Intercept Agent Actions
         action = None
         if "[ACTION: GENERATE_DASHBOARD]" in response_text:
             action = "GENERATE_DASHBOARD"
             response_text = response_text.replace("[ACTION: GENERATE_DASHBOARD]", "").strip()
             if not response_text:
-                response_text = "I have analyzed the data and generated your dashboard. Click the button below to view it."
+                response_text = "I have analyzed the data and prepared your dashboard. Click the button below to open it."
 
         return {"response": response_text, "context_found": bool(context), "action": action}
     except RuntimeError as exc:
         return {
-            "response": (
-                "⚠️ All AI providers are currently unavailable (quota exceeded). "
-                "Please try again in a few minutes."
-            ),
+            "response": "⚠️ All AI providers are currently unavailable. Please try again in a moment.",
             "context_found": False,
             "error": str(exc),
         }
@@ -281,16 +308,6 @@ async def export_data(
     data: str = Form(...),
     x_api_key: str | None = Header(default=None),
 ):
-    """
-    Export analytics data in multiple formats:
-    - **json** → JSON file
-    - **csv** → CSV file
-    - **xlsx** → Excel file (requires openpyxl)
-
-    Pass the analysis JSON from the frontend as the `data` field.
-    """
-    # No API key check for demo purposes
-
     try:
         parsed = json.loads(data)
     except json.JSONDecodeError:
@@ -298,7 +315,6 @@ async def export_data(
 
     fmt = format.lower().strip()
 
-    # ── JSON export ───────────────────────────────────────────────────────────
     if fmt == "json":
         content = json.dumps(parsed, indent=2, ensure_ascii=False)
         return StreamingResponse(
@@ -307,11 +323,9 @@ async def export_data(
             headers={"Content-Disposition": "attachment; filename=ragify_export.json"},
         )
 
-    # ── CSV export ────────────────────────────────────────────────────────────
     if fmt == "csv":
         output = io.StringIO()
         writer = csv.writer(output)
-
         summary = parsed.get("summary", {})
         columns = summary.get("columns", [])
         writer.writerow(["RAGify Analytics Export"])
@@ -322,7 +336,6 @@ async def export_data(
         writer.writerow(["Insights", parsed.get("insights", "")])
         writer.writerow([])
         writer.writerow(["Detected Columns"] + columns)
-
         chart = parsed.get("chart_data")
         if chart and chart.get("labels") and chart.get("datasets"):
             writer.writerow([])
@@ -330,33 +343,27 @@ async def export_data(
             writer.writerow(["Label", chart["datasets"][0].get("label", "Value")])
             for label, val in zip(chart["labels"], chart["datasets"][0]["data"]):
                 writer.writerow([label, val])
-
-        content = output.getvalue().encode("utf-8-sig")  # BOM for Excel compatibility
+        content = output.getvalue().encode("utf-8-sig")
         return StreamingResponse(
             io.BytesIO(content),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=ragify_export.csv"},
         )
 
-    # ── XLSX export ───────────────────────────────────────────────────────────
     if fmt == "xlsx":
         try:
             import openpyxl
-            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.styles import Font, PatternFill
         except ImportError:
             raise HTTPException(status_code=500, detail="openpyxl not installed.")
 
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "RAGify Analytics"
-
         header_font = Font(bold=True, color="FFFFFF")
-        header_fill = PatternFill("solid", fgColor="6366F1")  # indigo
-
+        header_fill = PatternFill("solid", fgColor="6366F1")
         summary = parsed.get("summary", {})
         columns = summary.get("columns", [])
-
-        # Summary section
         ws.append(["RAGify Analytics Export"])
         ws["A1"].font = Font(bold=True, size=14)
         ws.append([])
@@ -370,7 +377,6 @@ async def export_data(
         ws.append([])
         ws.append(["Detected Columns"])
         ws.append(columns)
-
         chart = parsed.get("chart_data")
         if chart and chart.get("labels") and chart.get("datasets"):
             ws.append([])
@@ -378,12 +384,9 @@ async def export_data(
             ws.append(["Label", chart["datasets"][0].get("label", "Value")])
             for label, val in zip(chart["labels"], chart["datasets"][0]["data"]):
                 ws.append([label, val])
-
-        # Adjust column widths
         for col in ws.columns:
             max_len = max((len(str(cell.value or "")) for cell in col), default=10)
             ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 50)
-
         buffer = io.BytesIO()
         wb.save(buffer)
         buffer.seek(0)
@@ -392,43 +395,34 @@ async def export_data(
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": "attachment; filename=ragify_export.xlsx"},
         )
-    # ── PDF export ───────────────────────────────────────────────────────────
+
     if fmt == "pdf":
         try:
             from fpdf import FPDF
         except ImportError:
             raise HTTPException(status_code=500, detail="fpdf2 not installed.")
-
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Helvetica", size=12)
-
+        pdf.set_font("Helvetica", style="B", size=16)
+        pdf.cell(200, 10, txt="RAGify Analytics Report", ln=1, align="C")
+        pdf.ln(8)
         summary = parsed.get("summary", {})
         columns = summary.get("columns", [])
-
-        pdf.set_font("Helvetica", style="B", size=16)
-        pdf.cell(200, 10, txt="RAGify Analytics Export", ln=1, align="C")
-        pdf.ln(10)
-
         pdf.set_font("Helvetica", style="B", size=12)
         pdf.cell(200, 10, txt="Summary Metrics", ln=1)
-        pdf.set_font("Helvetica", size=12)
-        pdf.cell(200, 10, txt=f"Total Rows: {summary.get('rows_count', 'N/A')}", ln=1)
-        pdf.cell(200, 10, txt=f"Total Columns: {len(columns)}", ln=1)
+        pdf.set_font("Helvetica", size=11)
+        pdf.cell(200, 8, txt=f"Total Rows: {summary.get('rows_count', 'N/A')}", ln=1)
+        pdf.cell(200, 8, txt=f"Total Columns: {len(columns)}", ln=1)
         pdf.ln(5)
-
         pdf.set_font("Helvetica", style="B", size=12)
-        pdf.cell(200, 10, txt="Insights", ln=1)
-        pdf.set_font("Helvetica", size=12)
-        # multi_cell handles line wrapping automatically
-        pdf.multi_cell(0, 10, txt=parsed.get("insights", ""))
+        pdf.cell(200, 10, txt="AI Insights", ln=1)
+        pdf.set_font("Helvetica", size=11)
+        pdf.multi_cell(0, 8, txt=parsed.get("insights", ""))
         pdf.ln(5)
-
         pdf.set_font("Helvetica", style="B", size=12)
-        pdf.cell(200, 10, txt="Detected Columns", ln=1)
-        pdf.set_font("Helvetica", size=12)
-        pdf.multi_cell(0, 10, txt=", ".join(columns))
-
+        pdf.cell(200, 10, txt="Columns Detected", ln=1)
+        pdf.set_font("Helvetica", size=11)
+        pdf.multi_cell(0, 8, txt=", ".join(columns))
         content = pdf.output()
         buffer = io.BytesIO(content)
         buffer.seek(0)
@@ -447,19 +441,14 @@ async def export_data(
 
 @app.delete("/reset", tags=["System"])
 def reset_knowledge_base(x_api_key: str | None = Header(default=None)):
-    """
-    Wipe the entire FAISS vector database.
-    All uploaded documents will be forgotten. Use with caution.
-    """
-    # No API key check for demo purposes
-
+    """Wipe the entire FAISS vector database and file registry."""
     import shutil
-    db_path = os.path.join(os.path.dirname(__file__), "services", "..", "vectorstore", "db_faiss")
+    db_path = os.path.join(os.path.dirname(__file__), "vectorstore", "db_faiss")
     if os.path.exists(db_path):
         shutil.rmtree(db_path)
-        logger.info("FAISS vector database wiped.")
-        return {"message": "✅ Knowledge base reset. All documents have been removed."}
-    return {"message": "Nothing to reset — no documents were indexed."}
+    _uploaded_files.clear()
+    logger.info("FAISS vector database and file registry wiped.")
+    return {"message": "✅ Knowledge base reset. All documents have been removed."}
 
 
 if __name__ == "__main__":
