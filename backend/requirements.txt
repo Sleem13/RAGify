@@ -10,7 +10,7 @@ langchain-google-genai
 langchain-groq
 faiss-cpu
 sentence-transformers
-pypdf
+pymupdf
 docx2txt
 pandas
 openpyxl

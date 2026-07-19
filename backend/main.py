@@ -213,7 +213,7 @@ async def chat(
     # ── Retrieve context from FAISS Vector DB ─────────────────────────────────
     context = ""
     try:
-        results = vector_db.query(message, top_k=5)
+        results = vector_db.query(message, top_k=10)
         if results and results.get("matches"):
             context_texts = [
                 m["metadata"]["text"]
@@ -227,20 +227,22 @@ async def chat(
     # ── Build prompt ──────────────────────────────────────────────────────────
     if context:
         prompt = (
-            "You are a professional AI assistant with access to uploaded documents.\n"
-            "Answer the question using ONLY the context provided below.\n"
-            "If the answer is not in the context, say: 'I could not find this information in the uploaded documents.'\n"
-            "IMPORTANT: Always answer in the exact same language as the user's QUESTION (e.g., if the question is in Arabic, answer in Arabic).\n\n"
+            "أنت مساعد ذكي ومحلل بيانات للشركات الكبرى. \n"
+            "مهمتك الأساسية هي الإجابة فقط وبشكل حصري من (النصوص أو الجداول أو الصور) الموجودة في السياق المرفق أدناه.\n"
+            "قواعد صارمة جداً:\n"
+            "1. لا تخترع أي معلومة إطلاقاً من خارج السياق المرفق.\n"
+            "2. إذا سألك المستخدم عن معلومة ولم تجدها في السياق، يجب أن ترد حصرياً بـ: 'عذراً، بناءً على الملفات المرفوعة، هذه المعلومة غير متوفرة.'\n"
+            "3. إذا كانت الإجابة موجودة، قم بصياغتها بشكل احترافي، منظم، ودقيق.\n"
+            "4. يجب أن ترد دائماً باللغة العربية، إلا إذا طلب المستخدم لغة أخرى صراحة.\n\n"
             f"CONTEXT:\n{context}\n\n"
             f"QUESTION: {message}\n\n"
             "ANSWER:"
         )
     else:
         prompt = (
-            "You are a professional AI assistant.\n"
-            "No documents have been indexed yet. Answer using your general knowledge.\n"
-            "Remind the user they can upload PDF, DOCX, or Excel files for document-specific answers.\n"
-            "IMPORTANT: Always answer in the exact same language as the user's QUESTION (e.g., if the question is in Arabic, answer in Arabic).\n\n"
+            "أنت مساعد ذكي للشركات الكبرى. \n"
+            "لم يتم رفع أي ملفات أو بيانات بعد. أجب بناءً على معرفتك العامة، وذكر المستخدم بلطف أنه يمكنه رفع ملفات (PDF, Excel, Word, الصور) وسؤالي عنها لكي أقدم له تحليلاً دقيقاً.\n"
+            "يجب أن ترد دائماً باللغة العربية، إلا إذا طلب المستخدم لغة أخرى.\n\n"
             f"QUESTION: {message}\n\n"
             "ANSWER:"
         )
