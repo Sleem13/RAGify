@@ -38,7 +38,13 @@ interface ChartData {
 }
 
 interface AnalysisData {
-  summary: { columns: string[]; rows_count: number; date_columns?: string[] };
+  summary: { 
+    columns: string[]; 
+    rows_count: number; 
+    date_columns?: string[];
+    numeric_columns?: string[];
+    categorical_columns?: string[];
+  };
   charts?: ChartData[];
   chart_data?: any; // Legacy
   insights: string;
