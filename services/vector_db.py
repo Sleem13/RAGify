@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 import logging
 import math
 import os
@@ -33,6 +34,14 @@ class VectorDBManager:
         project_root = Path(__file__).resolve().parent.parent
         self.db_path = Path(db_path or project_root / "vectorstore" / "db_faiss")
         self._embeddings = embeddings
+        self.model_name = (
+            f"custom:{type(embeddings).__name__}"
+            if embeddings is not None
+            else os.getenv(
+                "RAGIFY_EMBEDDING_MODEL",
+                "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            )
+        )
         self._cached_db: FAISS | None = None
         self._lock = threading.RLock()
         logger.info("Local hybrid FAISS manager initialized.")
@@ -46,7 +55,7 @@ class VectorDBManager:
         """Load the local embedding model only when indexing or searching starts."""
         if self._embeddings is None:
             self._embeddings = HuggingFaceEmbeddings(
-                model_name="sentence-transformers/all-MiniLM-L6-v2",
+                model_name=self.model_name,
                 encode_kwargs={"normalize_embeddings": True},
             )
         return self._embeddings
@@ -57,11 +66,32 @@ class VectorDBManager:
         if not self.has_index:
             return None
         try:
-            self._cached_db = FAISS.load_local(
+            loaded_db = FAISS.load_local(
                 str(self.db_path),
                 self.embeddings,
                 allow_dangerous_deserialization=True,
             )
+            config_path = self.db_path / "config.json"
+            stored_model = None
+            if config_path.exists():
+                try:
+                    stored_model = json.loads(config_path.read_text(encoding="utf-8")).get(
+                        "embedding_model"
+                    )
+                except (OSError, json.JSONDecodeError):
+                    stored_model = None
+
+            if stored_model != self.model_name:
+                documents = self._documents(loaded_db)
+                logger.info(
+                    "Migrating %s chunk(s) from embedding model '%s' to '%s'.",
+                    len(documents),
+                    stored_model or "legacy/unknown",
+                    self.model_name,
+                )
+                self._persist_documents(documents)
+            else:
+                self._cached_db = loaded_db
             return self._cached_db
         except Exception as exc:
             logger.error("Failed to load FAISS database: %s", exc)
@@ -90,6 +120,10 @@ class VectorDBManager:
         temp_path = Path(tempfile.mkdtemp(prefix="ragify-faiss-", dir=self.db_path.parent))
         try:
             new_db.save_local(str(temp_path))
+            (temp_path / "config.json").write_text(
+                json.dumps({"embedding_model": self.model_name}, indent=2),
+                encoding="utf-8",
+            )
             if self.db_path.exists():
                 shutil.rmtree(self.db_path)
             os.replace(temp_path, self.db_path)
