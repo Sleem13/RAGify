@@ -20,6 +20,20 @@
 
 The easiest way to run RAGify is using Docker. You don't need to install Python, Node.js, or any other dependencies.
 
+### Streamlit demo
+
+If you want a lightweight visual demo of the same workflow, you can run the Streamlit app separately:
+
+```bash
+cd streamlit_app
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+The demo expects the backend to be available at http://localhost:9999. If your backend runs elsewhere, set the RAGIFY_BACKEND_URL environment variable before launching Streamlit.
+
 ### 1. Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) installed on your machine.
 - API Keys for the AI models (both have generous free tiers):
