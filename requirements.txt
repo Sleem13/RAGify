@@ -6,6 +6,7 @@ python-multipart
 langchain
 langchain-core
 langchain-community
+langchain-huggingface
 langchain-google-genai
 langchain-groq
 langchain-text-splitters
@@ -19,3 +20,5 @@ xlrd
 fpdf2
 python-pptx
 Pillow
+streamlit>=1.37.0
+requests>=2.32.0

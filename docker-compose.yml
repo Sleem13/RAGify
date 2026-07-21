@@ -1,13 +1,14 @@
 services:
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: ragify-backend
     ports:
       - "9999:9999"
     env_file:
-      - .env                             # reads GEMINI_API_KEY and GROQ_API_KEY
+      - path: .env                       # reads GEMINI_API_KEY and GROQ_API_KEY
+        required: false
     volumes:
       - ragify_vectorstore:/home/user/app/vectorstore
       - ragify_data:/home/user/app/data  # persists files_registry.json

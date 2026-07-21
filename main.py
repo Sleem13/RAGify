@@ -8,7 +8,7 @@ import csv
 import json
 import secrets
 import logging
-from typing import List, Optional
+from typing import Optional
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -18,21 +18,25 @@ from services.document_processor import document_processor
 from services.vector_db import vector_db
 from services.llm_manager import llm_manager
 from services.data_analyzer import data_analyzer
+from services.retrieval import build_context, build_grounded_prompt, normalize_history
 
 app = FastAPI(
     title="RAGify API",
     description="AI-powered document analysis and retrieval system. Upload files, ask questions, get insights.",
-    version="4.0.0",
+    version="5.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
-# Allow all origins for Codespaces/Docker compatibility.
-# For production, replace "*" with your specific frontend domain.
+configured_origins = [
+    origin.strip()
+    for origin in os.getenv("FRONTEND_URL", "*").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=configured_origins or ["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,6 +76,9 @@ def _save_registry(registry: dict):
 
 # Load registry on startup
 _uploaded_files: dict = _load_registry()
+if _uploaded_files and not vector_db.has_index:
+    logger.warning("Ignoring stale file registry because the FAISS index is missing.")
+    _uploaded_files = {}
 logger.info(f"Loaded file registry: {len(_uploaded_files)} file(s) found.")
 
 
@@ -93,7 +100,7 @@ def health_check():
     return {
         "status": "healthy",
         "app": "RAGify API",
-        "version": "4.0.0",
+        "version": "5.0.0",
         "loaded_models": llm_manager.available_models,
         "indexed_files": len(_uploaded_files),
         "docs": "/docs",
@@ -139,11 +146,13 @@ def list_files():
 
 
 @app.delete("/files/{filename}", tags=["Documents"])
-def delete_file(filename: str):
+def delete_file(filename: str, x_api_key: str | None = Header(default=None)):
     """
     Remove a specific file from the registry AND from the FAISS vector database.
     After this call the AI will no longer have access to that file's content.
     """
+    if not _verify_api_key(x_api_key):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
     if filename not in _uploaded_files:
         raise HTTPException(status_code=404, detail=f"File '{filename}' not found in registry.")
 
@@ -187,6 +196,9 @@ async def upload_file(
     ext = os.path.splitext(filename)[1].lower()
     contents = await file.read()
 
+    if not contents:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+
     # ── File size guard ───────────────────────────────────────────────────────
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(
@@ -206,11 +218,12 @@ async def upload_file(
         chunks = []
         try:
             chunks = await document_processor.process_excel_for_rag(contents, filename)
-            if chunks:
-                vector_db.add_chunks(chunks, filename=filename)
-                logger.info(f"Excel '{filename}' indexed in FAISS with {len(chunks)} chunks.")
+            if not chunks:
+                raise ValueError("The spreadsheet did not contain indexable data.")
+            vector_db.replace_file_chunks(chunks, filename=filename)
+            logger.info(f"Excel '{filename}' indexed in FAISS with {len(chunks)} chunks.")
         except Exception as exc:
-            logger.warning(f"Could not index Excel in FAISS: {exc}")
+            raise HTTPException(status_code=422, detail=f"Indexing error: {exc}") from exc
 
         _uploaded_files[filename] = {
             "type": "excel",
@@ -236,7 +249,12 @@ async def upload_file(
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"Processing error: {exc}")
 
-        vector_db.add_chunks(chunks, filename=filename)
+        if not chunks:
+            raise HTTPException(
+                status_code=422,
+                detail="No readable content was found in the uploaded document.",
+            )
+        vector_db.replace_file_chunks(chunks, filename=filename)
         _uploaded_files[filename] = {"type": "document", "chunks": len(chunks)}
         _save_registry(_uploaded_files)
 
@@ -287,72 +305,41 @@ async def chat(
 
     # ── Parse conversation history ─────────────────────────────────────────────
     try:
-        chat_history: List[dict] = json.loads(history)
-        # Keep only last 8 exchanges to avoid token overflow
-        chat_history = chat_history[-16:]
-    except Exception:
+        chat_history = normalize_history(json.loads(history))
+    except (TypeError, json.JSONDecodeError):
         chat_history = []
 
     # ── Retrieve context from FAISS Vector DB ─────────────────────────────────
-    context = ""
     try:
-        results = vector_db.query(message, top_k=10)
-        if results and results.get("matches"):
-            context_texts = [
-                m["metadata"]["text"]
-                for m in results["matches"]
-                if m.get("metadata", {}).get("text")
-            ]
-            context = "\n\n---\n\n".join(context_texts)
+        matches = vector_db.hybrid_search(message, top_k=10)
     except Exception as exc:
-        logger.warning(f"Vector DB query failed: {exc}")
+        logger.warning("Hybrid retrieval failed: %s", exc)
+        matches = []
+
+    context, sources = build_context(matches)
+    if not context:
+        response_text = (
+            "I could not find this information in the uploaded files."
+            if _uploaded_files
+            else "Upload a document or spreadsheet first, then ask a question about it."
+        )
+        return {
+            "response": response_text,
+            "context_found": False,
+            "action": None,
+            "sources": [],
+        }
 
     # ── Build conversation history string ──────────────────────────────────────
-    history_str = ""
-    if chat_history:
-        history_str = "CONVERSATION HISTORY (for context continuity):\n"
-        for turn in chat_history:
-            role = "User" if turn.get("role") == "user" else "Assistant"
-            history_str += f"{role}: {turn.get('content', '')}\n"
-        history_str += "\n"
-
     # ── Build prompt ──────────────────────────────────────────────────────────
-    indexed_files_list = ", ".join(_uploaded_files.keys()) if _uploaded_files else "none"
-
-    if context:
-        prompt = (
-            "You are a professional Enterprise AI Assistant, Data Analyst, and intelligent agent.\n"
-            f"Currently indexed files: {indexed_files_list}\n\n"
-            "STRICT RULES:\n"
-            "1. Answer based ONLY on the CONTEXT below. Never invent facts.\n"
-            "2. If the answer is NOT in the context, say: 'Based on the uploaded files, I could not find this information.'\n"
-            "3. RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S CURRENT QUESTION.\n"
-            "4. Use the CONVERSATION HISTORY to understand follow-up questions and maintain context.\n"
-            "5. AGENTIC ACTIONS: If the user asks to 'create a dashboard', 'visualize data', 'show chart', or 'generate a report', include the token `[ACTION: GENERATE_DASHBOARD]` in your response.\n"
-            "6. Format answers with clear structure using **markdown** (bullet points, **bold**, headers) when appropriate.\n\n"
-            f"{history_str}"
-            f"CONTEXT FROM DOCUMENTS:\n{context}\n\n"
-            f"USER QUESTION: {message}\n\n"
-            "ANSWER:"
-        )
-    else:
-        if _uploaded_files:
-            no_context_note = f"Files are indexed ({indexed_files_list}) but no relevant context was found for this question."
-        else:
-            no_context_note = "No files have been uploaded yet."
-
-        prompt = (
-            "You are a professional Enterprise AI Assistant.\n"
-            f"{no_context_note} Answer based on general knowledge if appropriate.\n"
-            "Politely remind the user they can upload files (PDF, Excel, Word, Images, CSV) for precise analysis.\n"
-            "RESPOND IN THE EXACT SAME LANGUAGE AS THE USER'S QUESTION.\n"
-            "Use **markdown formatting** where appropriate.\n\n"
-            f"{history_str}"
-            f"USER QUESTION: {message}\n\n"
-            "ANSWER:"
-        )
-
     # ── Generate response ─────────────────────────────────────────────────────
+    prompt = build_grounded_prompt(
+        message,
+        context,
+        chat_history,
+        _uploaded_files.keys(),
+    )
+
     try:
         response_text = await llm_manager.generate_response(prompt)
 
@@ -364,11 +351,17 @@ async def chat(
             if not response_text:
                 response_text = "I have analyzed the data and prepared your dashboard. Click the button below to open it."
 
-        return {"response": response_text, "context_found": bool(context), "action": action}
+        return {
+            "response": response_text,
+            "context_found": True,
+            "action": action,
+            "sources": sources,
+        }
     except RuntimeError as exc:
         return {
             "response": "⚠️ All AI providers are currently unavailable. Please try again in a moment.",
             "context_found": False,
+            "sources": sources,
             "error": str(exc),
         }
 
@@ -517,13 +510,8 @@ async def export_data(
 @app.delete("/reset", tags=["System"])
 def reset_knowledge_base(x_api_key: str | None = Header(default=None)):
     """Wipe the entire FAISS vector database and file registry."""
-    import shutil
-
-    db_path = os.path.join(os.path.dirname(__file__), "vectorstore", "db_faiss")
-    if os.path.exists(db_path):
-        shutil.rmtree(db_path)
-
-    # Clear in-memory cache in vector_db
+    if not _verify_api_key(x_api_key):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
     vector_db.reset()
 
     # Clear and persist the registry

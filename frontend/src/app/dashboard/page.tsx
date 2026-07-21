@@ -1,12 +1,12 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   UploadCloud, MessageSquare, BarChart3, Send, Settings, Check,
   Sun, Moon, Languages, Home, Key, Copy, Trash2, RefreshCw,
-  FileText, FileSpreadsheet, Image, X, FolderOpen, ChevronRight, Plus
+  FileText, FileSpreadsheet, Image as ImageIcon, X, FolderOpen, ChevronRight, Plus
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAppContext } from '@/context/AppContext';
@@ -47,7 +47,9 @@ export default function Dashboard() {
 
   // File registry from backend
   const [indexedFiles, setIndexedFiles] = useState<Record<string, IndexedFile>>({});
-  const [hasExcelData, setHasExcelData] = useState(false);
+  const [hasExcelData, setHasExcelData] = useState(
+    () => typeof window !== 'undefined' && Boolean(localStorage.getItem('excel_analysis'))
+  );
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -95,9 +97,12 @@ export default function Dashboard() {
 
   // ── Fetch indexed files from backend ─────────────────────────────────────
 
-  const fetchFiles = async () => {
+  const fetchFiles = useCallback(async () => {
     try {
-      const res = await axios.get(`${getApiUrl()}/files`, getAxiosConfig());
+      const apiUrl = customApiUrl.trim() || process.env.NEXT_PUBLIC_API_URL || '/api/backend';
+      const res = await axios.get(`${apiUrl}/files`, {
+        headers: { "Bypass-Tunnel-Reminder": "true" }
+      });
       setIndexedFiles(res.data.files || {});
       const hasExcel = Object.values(res.data.files || {}).some(
         (f: unknown) => (f as IndexedFile).type === 'excel'
@@ -106,21 +111,19 @@ export default function Dashboard() {
     } catch {
       // Backend might not be up yet
     }
-  };
+  }, [customApiUrl]);
 
   useEffect(() => {
-    fetchFiles();
-    if (typeof window !== 'undefined' && localStorage.getItem('excel_analysis')) {
-      setHasExcelData(true);
-    }
-  }, []);
+    const timer = window.setTimeout(() => void fetchFiles(), 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchFiles]);
 
   // ── File icon helper ───────────────────────────────────────────────────────
 
   const getFileIcon = (filename: string) => {
     const ext = filename.split('.').pop()?.toLowerCase() || '';
     if (['xlsx', 'xls', 'csv'].includes(ext)) return <FileSpreadsheet className="w-4 h-4 text-emerald-500" />;
-    if (['png', 'jpg', 'jpeg'].includes(ext)) return <Image className="w-4 h-4 text-pink-500" />;
+    if (['png', 'jpg', 'jpeg'].includes(ext)) return <ImageIcon className="w-4 h-4 text-pink-500" />;
     return <FileText className="w-4 h-4 text-indigo-500" />;
   };
 

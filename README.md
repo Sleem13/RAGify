@@ -10,11 +10,22 @@
 - 💬 **Intelligent Chat**: Ask natural language questions about your documents. The AI strictly uses your documents as context.
 - 📊 **Auto-Generated Dashboards**: Upload Excel/CSV files and instantly get professional, interactive charts and insights.
 - ⚡ **Lightning Fast**: Uses FAISS for sub-millisecond vector similarity search.
+- 🔎 **Hybrid Retrieval**: Combines semantic similarity with BM25-style lexical ranking and source-aware context selection.
 - 🔒 **Privacy First**: Your documents are chunked, embedded, and stored locally on your machine.
 - 🌐 **Multi-Language UI**: Full support for English and Arabic with dynamic RTL/LTR layouts.
 - 🐳 **One-Click Deployment**: Fully containerized with Docker for seamless deployment anywhere.
 
 ---
+
+## RAG pipeline
+
+The backend follows the staged SimpleRAG architecture while retaining RAGify's richer file support:
+
+1. `services/document_processor.py` loads PDF, Office, image, text, and tabular files and creates metadata-rich chunks.
+2. `services/preprocessing.py` normalizes text for lexical search while preserving negation and multilingual tokens.
+3. `services/vector_db.py` persists MiniLM embeddings in FAISS and combines semantic and BM25-style scores.
+4. `services/retrieval.py` selects diverse results, numbers sources, validates conversation history, and builds a grounded prompt.
+5. `services/llm_manager.py` sends the grounded prompt through the configured provider fallback chain.
 
 ## 🚀 Getting Started
 
@@ -25,7 +36,6 @@ The easiest way to run RAGify is using Docker. You don't need to install Python,
 If you want a lightweight visual demo of the same workflow, you can run the Streamlit app separately:
 
 ```bash
-cd streamlit_app
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -88,11 +98,11 @@ RAGify is pre-configured to run perfectly in GitHub Codespaces.
 
 ## 🛠️ Architecture
 
-- **Frontend**: Next.js 14, Tailwind CSS, Lucide Icons, React Markdown.
+- **Frontend**: Next.js 16, Tailwind CSS, Lucide Icons, React Markdown.
 - **Backend**: FastAPI, LangChain, FAISS, Pandas, PyMuPDF.
 - **AI Models**: 
   - *Embeddings*: `all-MiniLM-L6-v2` (Runs 100% locally)
-  - *LLMs*: Automatic fallback chain between Gemini 1.5 Flash/Pro and Groq (Llama 3, Mixtral).
+  - *LLMs*: Automatic fallback chain across Gemini 2.5 Flash/Flash-Lite and Groq GPT-OSS 20B/120B.
 
 ---
 

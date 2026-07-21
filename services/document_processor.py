@@ -77,7 +77,12 @@ class DocumentProcessor:
                     os.remove(temp_file_path)
 
         # ── Chunking ──────────────────────────────────────────────────────────
+        documents = [doc for doc in documents if doc.page_content.strip()]
         chunks = self.text_splitter.split_documents(documents)
+        for chunk_index, chunk in enumerate(chunks):
+            chunk.metadata.update(
+                {"source": filename, "chunk_index": chunk_index, "is_current": True}
+            )
         logger.info(
             f"Processed '{filename}': {len(documents)} page(s) → {len(chunks)} chunks."
         )
@@ -130,7 +135,7 @@ class DocumentProcessor:
         gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
         if not gemini_key or gemini_key == "your_gemini_key_here":
             logger.warning("No GEMINI_API_KEY found, skipping image vision processing.")
-            return "Image analysis skipped: No Gemini API Key configured."
+            raise ValueError("Image analysis requires a configured GEMINI_API_KEY.")
 
         from langchain_google_genai import ChatGoogleGenerativeAI
         from langchain_core.messages import HumanMessage
@@ -140,7 +145,7 @@ class DocumentProcessor:
         if mime_type == "image/jpg": 
             mime_type = "image/jpeg"
 
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=gemini_key)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", google_api_key=gemini_key)
         msg = HumanMessage(content=[
             {
                 "type": "text", 
@@ -199,7 +204,10 @@ class DocumentProcessor:
             if ext == ".csv":
                 df = pd.read_csv(temp_file_path, encoding="utf-8", on_bad_lines="skip")
             elif ext == ".json":
-                df = pd.read_json(temp_file_path)
+                try:
+                    df = pd.read_json(temp_file_path)
+                except ValueError:
+                    df = pd.read_json(temp_file_path, lines=True)
             elif ext == ".xls":
                 df = pd.read_excel(temp_file_path, engine="xlrd")
             else:
@@ -257,7 +265,7 @@ class DocumentProcessor:
 
         except Exception as exc:
             logger.error(f"Failed to convert Excel to RAG: {exc}")
-            return []
+            raise ValueError(f"Failed to convert spreadsheet for retrieval: {exc}") from exc
         finally:
             if temp_file_path and os.path.exists(temp_file_path):
                 os.remove(temp_file_path)

@@ -14,13 +14,10 @@ class FallbackLLMManager:
     AI providers when a quota limit (429) or any error is encountered.
 
     Fallback priority order:
-      1. Google Gemini 1.5 Flash  (fast, generous free tier)
-      2. Google Gemini 1.5 Pro    (powerful, free tier)
-      3. Groq  – Llama 3.1 70B   (extremely fast inference)
-      4. Groq  – Llama 3.1 8B    (lighter, separate rate limit)
-      5. Groq  – Mixtral 8x7B    (strong reasoning)
-      6. Groq  – Gemma 2 9B      (Google-trained open model on Groq)
-      7. Groq  – Llama 3 70B     (legacy, separate quota)
+      1. Google Gemini 2.5 Flash
+      2. Google Gemini 2.5 Flash-Lite
+      3. Groq GPT-OSS 20B
+      4. Groq GPT-OSS 120B
     """
 
     def __init__(self):
@@ -44,8 +41,8 @@ class FallbackLLMManager:
         # ── 1 & 2: Google Gemini ──────────────────────────────────────────────
         if gemini_key and gemini_key not in ("your_gemini_key_here", ""):
             for model_name, label in [
-                ("gemini-1.5-flash", "Gemini 1.5 Flash"),
-                ("gemini-1.5-pro",   "Gemini 1.5 Pro"),
+                ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+                ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite"),
             ]:
                 try:
                     llm = ChatGoogleGenerativeAI(
@@ -62,11 +59,8 @@ class FallbackLLMManager:
         # Each model has its own quota → 5 independent fallback slots
         if groq_key and groq_key not in ("your_groq_key_here", ""):
             groq_models = [
-                ("llama3-8b-8192",            "Groq Llama3 8B"),          # most stable
-                ("llama3-70b-8192",           "Groq Llama3 70B"),         # powerful
-                ("llama-3.1-8b-instant",      "Groq Llama-3.1 8B"),      # fast
-                ("mixtral-8x7b-32768",         "Groq Mixtral 8x7B"),      # reasoning
-                ("gemma2-9b-it",               "Groq Gemma2 9B"),         # backup
+                ("openai/gpt-oss-20b", "Groq GPT-OSS 20B"),
+                ("openai/gpt-oss-120b", "Groq GPT-OSS 120B"),
             ]
             for model_id, label in groq_models:
                 try:

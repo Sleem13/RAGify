@@ -13,6 +13,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import type { ChartData as ChartJsData } from 'chart.js';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Download, FileJson, FileSpreadsheet, FileText, ChevronDown, LayoutDashboard } from 'lucide-react';
 import { useAppContext } from '@/context/AppContext';
@@ -34,7 +35,15 @@ interface ChartData {
   title: string;
   type: 'bar' | 'pie' | 'line';
   labels: string[];
-  datasets: any[];
+  datasets: Array<{
+    label?: string;
+    data: number[];
+    backgroundColor?: string | string[];
+    borderColor?: string;
+    borderWidth?: number;
+    fill?: boolean;
+    tension?: number;
+  }>;
 }
 
 interface AnalysisData {
@@ -46,7 +55,7 @@ interface AnalysisData {
     categorical_columns?: string[];
   };
   charts?: ChartData[];
-  chart_data?: any; // Legacy
+  chart_data?: ChartData; // Legacy
   insights: string;
 }
 
@@ -248,7 +257,7 @@ export default function AnalyticsDashboard() {
               <div className={chart.type === 'pie' ? "h-[300px] flex justify-center" : "h-[400px]"}>
                 {chart.type === 'bar' && (
                   <Bar
-                    data={chart as any}
+                    data={chart as unknown as ChartJsData<'bar', number[], string>}
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
@@ -264,7 +273,7 @@ export default function AnalyticsDashboard() {
                 )}
                 {chart.type === 'pie' && (
                   <Pie
-                    data={chart as any}
+                    data={chart as unknown as ChartJsData<'pie', number[], string>}
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,
@@ -276,7 +285,7 @@ export default function AnalyticsDashboard() {
                 )}
                 {chart.type === 'line' && (
                   <Line
-                    data={chart as any}
+                    data={chart as unknown as ChartJsData<'line', number[], string>}
                     options={{
                       responsive: true,
                       maintainAspectRatio: false,

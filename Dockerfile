@@ -19,8 +19,10 @@ COPY --chown=user requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY --chown=user . .
+# Copy only backend runtime code. The frontend has its own image.
+COPY --chown=user main.py ./
+COPY --chown=user services ./services
+COPY --chown=user data ./data
 
 # Create required directories for persistent data
 RUN mkdir -p vectorstore data

@@ -5,7 +5,11 @@ from typing import Any
 import requests
 import streamlit as st
 
-st.set_page_config(page_title="RAGify Streamlit Demo", page_icon="🤖", layout="wide")
+st.set_page_config(
+    page_title="RAGify Streamlit Demo",
+    page_icon=":material/library_books:",
+    layout="wide",
+)
 
 APP_TITLE = "RAGify Streamlit Demo"
 DEFAULT_BACKEND_URL = os.getenv("RAGIFY_BACKEND_URL", "http://localhost:9999")
@@ -24,9 +28,10 @@ def get_headers() -> dict[str, str]:
     return headers
 
 
-def check_backend_status() -> tuple[dict[str, Any] | None, str | None]:
+@st.cache_data(ttl=10, max_entries=10, show_spinner=False)
+def check_backend_status(url: str) -> tuple[dict[str, Any] | None, str | None]:
     try:
-        response = requests.get(f"{get_backend_url()}/", timeout=6)
+        response = requests.get(f"{url}/", timeout=6)
         if response.ok:
             return response.json(), None
         return None, f"Backend returned HTTP {response.status_code}"
@@ -88,7 +93,10 @@ def list_indexed_files() -> tuple[list[dict[str, Any]], str | None]:
     return [], f"Could not load files: HTTP {response.status_code}"
 
 
-def ask_question(message: str, history: list[dict[str, str]]) -> tuple[str | None, str | None, str | None]:
+def ask_question(
+    message: str,
+    history: list[dict[str, str]],
+) -> tuple[str | None, str | None, list[dict[str, Any]], str | None]:
     try:
         response = requests.post(
             f"{get_backend_url()}/chat",
@@ -100,21 +108,21 @@ def ask_question(message: str, history: list[dict[str, str]]) -> tuple[str | Non
             timeout=120,
         )
     except requests.ConnectionError:
-        return None, None, "Cannot connect to backend. Is it running?"
+        return None, None, [], "Cannot connect to backend. Is it running?"
     except requests.Timeout:
-        return None, None, "Request timed out. Please try again."
+        return None, None, [], "Request timed out. Please try again."
     except requests.RequestException as exc:
-        return None, None, f"Request failed: {exc}"
+        return None, None, [], f"Request failed: {exc}"
 
     if response.ok:
         payload = response.json()
-        return payload.get("response"), payload.get("action"), None
+        return payload.get("response"), payload.get("action"), payload.get("sources", []), None
 
     try:
         detail = response.json().get("detail", response.text)
     except ValueError:
         detail = response.text
-    return None, None, detail
+    return None, None, [], detail
 
 
 def init_session_state() -> None:
@@ -141,9 +149,9 @@ with st.sidebar:
     st.text_input("Backend URL", key="backend_url")
     st.text_input("API key", key="api_key", type="password")
     if st.button("Check backend"):
-        st.rerun()
+        check_backend_status.clear()
 
-    status, error = check_backend_status()
+    status, error = check_backend_status(get_backend_url())
     if status:
         st.success(f"Backend healthy: {status.get('app', 'RAGify')}")
     else:
@@ -187,8 +195,14 @@ with col2:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
+            message_sources = message.get("sources", [])
+            if message_sources:
+                with st.expander(f"Sources ({len(message_sources)})"):
+                    for source in message_sources:
+                        st.markdown(f"**[Source {source['id']}] {source['title']}**")
+                        st.caption(source["text"])
 
-    prompt = st.chat_input("Ask about your uploaded documents")
+    prompt = st.chat_input("Ask about your uploaded documents", submit_mode="disable")
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -200,7 +214,7 @@ with col2:
         ]
 
         with st.spinner("Thinking..."):
-            response, action, error = ask_question(prompt, history)
+            response, action, sources, error = ask_question(prompt, history)
 
         if error:
             reply = f"Sorry, something went wrong: {error}"
@@ -212,9 +226,16 @@ with col2:
         if action == "GENERATE_DASHBOARD":
             reply = f"{reply}\n\n🧭 Dashboard generation was requested. Open the analytics experience in the full app to view the visualization."
 
-        st.session_state.messages.append({"role": "assistant", "content": reply})
+        st.session_state.messages.append(
+            {"role": "assistant", "content": reply, "sources": sources}
+        )
         with st.chat_message("assistant"):
             st.write(reply)
+            if sources:
+                with st.expander(f"Sources ({len(sources)})"):
+                    for source in sources:
+                        st.markdown(f"**[Source {source['id']}] {source['title']}**")
+                        st.caption(source["text"])
         st.rerun()
 
 st.markdown("---")
