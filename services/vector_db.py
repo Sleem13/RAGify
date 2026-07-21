@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import hashlib
 import json
 import logging
 import math
@@ -39,7 +40,7 @@ class VectorDBManager:
             if embeddings is not None
             else os.getenv(
                 "RAGIFY_EMBEDDING_MODEL",
-                "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                "sentence-transformers/all-MiniLM-L6-v2",
             )
         )
         self._cached_db: FAISS | None = None
@@ -72,14 +73,14 @@ class VectorDBManager:
                 allow_dangerous_deserialization=True,
             )
             config_path = self.db_path / "config.json"
-            stored_model = None
+            stored_model = "sentence-transformers/all-MiniLM-L6-v2"
             if config_path.exists():
                 try:
                     stored_model = json.loads(config_path.read_text(encoding="utf-8")).get(
                         "embedding_model"
                     )
                 except (OSError, json.JSONDecodeError):
-                    stored_model = None
+                    stored_model = "sentence-transformers/all-MiniLM-L6-v2"
 
             if stored_model != self.model_name:
                 documents = self._documents(loaded_db)
@@ -92,6 +93,11 @@ class VectorDBManager:
                 self._persist_documents(documents)
             else:
                 self._cached_db = loaded_db
+                if not config_path.exists():
+                    config_path.write_text(
+                        json.dumps({"embedding_model": self.model_name}, indent=2),
+                        encoding="utf-8",
+                    )
             return self._cached_db
         except Exception as exc:
             logger.error("Failed to load FAISS database: %s", exc)
@@ -115,7 +121,22 @@ class VectorDBManager:
                 shutil.rmtree(self.db_path)
             return
 
-        new_db = FAISS.from_documents(documents, self.embeddings)
+        prepared_documents: list[Document] = []
+        for index, document in enumerate(documents):
+            source = str(document.metadata.get("source", "unknown"))
+            chunk_index = document.metadata.get("chunk_index", index)
+            digest = hashlib.sha256(
+                f"{source}\0{chunk_index}\0{document.page_content}".encode("utf-8")
+            ).hexdigest()
+            prepared_documents.append(
+                Document(
+                    id=digest,
+                    page_content=document.page_content,
+                    metadata=dict(document.metadata),
+                )
+            )
+
+        new_db = FAISS.from_documents(prepared_documents, self.embeddings)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = Path(tempfile.mkdtemp(prefix="ragify-faiss-", dir=self.db_path.parent))
         try:
@@ -243,7 +264,7 @@ class VectorDBManager:
         ranked: list[dict[str, Any]] = []
         for index, document in enumerate(documents):
             # Ignore wholly unrelated candidates instead of forcing arbitrary context.
-            if lexical_raw[index] <= 0 and semantic_raw[index] < 0.15:
+            if lexical_raw[index] <= 0 and semantic_raw[index] <= 0:
                 continue
             score = (1 - semantic_weight) * lexical[index] + semantic_weight * semantic[index]
             if document.metadata.get("is_current", True):

@@ -1,6 +1,7 @@
 from langchain_community.document_loaders import Docx2txtLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
+import asyncio
 import os
 import tempfile
 import logging
@@ -30,6 +31,17 @@ class DocumentProcessor:
             chunk_overlap=250,
             length_function=len,
         )
+        self.max_pdf_images = self._env_int("RAGIFY_MAX_PDF_IMAGES", 4)
+        self.pdf_image_timeout = self._env_int("RAGIFY_PDF_IMAGE_TIMEOUT", 20)
+        self.pdf_image_concurrency = self._env_int("RAGIFY_PDF_IMAGE_CONCURRENCY", 2)
+
+    @staticmethod
+    def _env_int(name: str, default: int) -> int:
+        try:
+            return max(0, int(os.getenv(name, str(default))))
+        except ValueError:
+            logger.warning("Invalid %s value; using %s.", name, default)
+            return default
 
     async def process_file(self, file_bytes: bytes, filename: str):
         ext = os.path.splitext(filename)[1].lower()
@@ -98,36 +110,65 @@ class DocumentProcessor:
         except ImportError:
             raise ValueError("PyMuPDF (fitz) is not installed. Run: pip install pymupdf")
 
-        pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
-        full_text = []
+        full_text: list[str] = []
+        image_candidates: list[tuple[int, int, bytes, str]] = []
+        seen_xrefs: set[int] = set()
 
-        for page_num in range(len(pdf_document)):
-            page = pdf_document.load_page(page_num)
-            page_text = page.get_text("text").strip()
-            
-            # Append page text
-            full_text.append(f"--- Page {page_num + 1} ---")
-            if page_text:
-                full_text.append(page_text)
-            
-            # Extract images from this page
-            image_list = page.get_images(full=True)
-            for img_index, img in enumerate(image_list):
-                xref = img[0]
-                base_image = pdf_document.extract_image(xref)
-                image_bytes = base_image["image"]
-                img_ext = base_image["ext"]
-                
-                # Only process reasonable sized images (skip tiny icons)
-                if len(image_bytes) > 5000:  
-                    try:
-                        logger.info(f"Extracting vision data from image on page {page_num + 1}")
-                        vision_text = await self._extract_image_text(image_bytes, f".{img_ext}")
-                        full_text.append(f"\n[Image/Chart detected on page {page_num + 1}]:\n{vision_text}\n")
-                    except Exception as e:
-                        logger.warning(f"Failed to process image on page {page_num + 1}: {e}")
+        with fitz.open(stream=file_bytes, filetype="pdf") as pdf_document:
+            for page_num in range(len(pdf_document)):
+                page = pdf_document.load_page(page_num)
+                page_text = page.get_text("text").strip()
+                full_text.append(f"--- Page {page_num + 1} ---")
+                if page_text:
+                    full_text.append(page_text)
 
-        pdf_document.close()
+                for image in page.get_images(full=True):
+                    xref = image[0]
+                    if xref in seen_xrefs:
+                        continue
+                    seen_xrefs.add(xref)
+                    base_image = pdf_document.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    if len(image_bytes) > 5000:
+                        image_candidates.append(
+                            (page_num + 1, len(page_text), image_bytes, base_image["ext"])
+                        )
+
+        image_candidates.sort(key=lambda item: (item[1] >= 120, -len(item[2])))
+        selected_images = image_candidates[: self.max_pdf_images]
+        if len(image_candidates) > len(selected_images):
+            logger.info(
+                "PDF '%s' has %s unique image candidates; analyzing the top %s.",
+                filename,
+                len(image_candidates),
+                len(selected_images),
+            )
+
+        semaphore = asyncio.Semaphore(max(1, self.pdf_image_concurrency))
+
+        async def analyze_image(candidate: tuple[int, int, bytes, str]):
+            page_number, _, image_bytes, image_extension = candidate
+            try:
+                async with semaphore:
+                    vision_text = await asyncio.wait_for(
+                        self._extract_image_text(image_bytes, f".{image_extension}"),
+                        timeout=max(1, self.pdf_image_timeout),
+                    )
+                return page_number, vision_text
+            except Exception as exc:
+                logger.warning("Image analysis failed on page %s: %s", page_number, exc)
+                return page_number, ""
+
+        if selected_images:
+            vision_results = await asyncio.gather(
+                *(analyze_image(candidate) for candidate in selected_images)
+            )
+            for page_number, vision_text in vision_results:
+                if vision_text:
+                    full_text.append(
+                        f"\n[Image/Chart detected on page {page_number}]:\n{vision_text}\n"
+                    )
+
         return "\n".join(full_text)
 
     async def _extract_image_text(self, file_bytes: bytes, ext: str) -> str:

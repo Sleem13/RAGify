@@ -101,7 +101,7 @@ RAGify is pre-configured to run perfectly in GitHub Codespaces.
 - **Frontend**: Next.js 16, Tailwind CSS, Lucide Icons, React Markdown.
 - **Backend**: FastAPI, LangChain, FAISS, Pandas, PyMuPDF.
 - **AI Models**: 
-  - *Embeddings*: `paraphrase-multilingual-MiniLM-L12-v2` (runs locally with English and Arabic support)
+  - *Embeddings*: `all-MiniLM-L6-v2` (runs locally)
   - *LLMs*: Automatic fallback chain across Gemini 2.5 Flash/Flash-Lite and Groq GPT-OSS 20B/120B.
 
 ---

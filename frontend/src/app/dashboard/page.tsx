@@ -202,10 +202,17 @@ export default function Dashboard() {
           setHasExcelData(true);
           localStorage.setItem('excel_analysis', JSON.stringify(res.data.analysis));
         }
-      } catch {
+      } catch (error: unknown) {
+        let detail = 'The upload could not be completed.';
+        if (axios.isAxiosError(error)) {
+          const responseDetail = error.response?.data?.detail;
+          detail = typeof responseDetail === 'string' ? responseDetail : error.message;
+        } else if (error instanceof Error) {
+          detail = error.message;
+        }
         setMessages(prev => [...prev, {
           role: 'system',
-          content: `❌ Error uploading '${file.name}'. Make sure the backend is running.`,
+          content: `Error uploading '${file.name}': ${detail}`,
           timestamp: Date.now()
         }]);
       }

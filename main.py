@@ -254,20 +254,15 @@ async def upload_file(
                 status_code=422,
                 detail="No readable content was found in the uploaded document.",
             )
-        vector_db.replace_file_chunks(chunks, filename=filename)
+        try:
+            vector_db.replace_file_chunks(chunks, filename=filename)
+        except Exception as exc:
+            logger.exception("Could not index '%s'.", filename)
+            raise HTTPException(status_code=500, detail=f"Indexing error: {exc}") from exc
         _uploaded_files[filename] = {"type": "document", "chunks": len(chunks)}
         _save_registry(_uploaded_files)
 
-        # Generate a smart summary after indexing
-        prompt = (
-            f"A document named '{filename}' was just uploaded and indexed with {len(chunks)} text chunks.\n"
-            "In 2-3 sentences, acknowledge this professionally and mention you are ready for questions.\n"
-            "MUST respond in English."
-        )
-        try:
-            summary = await llm_manager.generate_response(prompt)
-        except Exception:
-            summary = f"✅ '{filename}' has been indexed ({len(chunks)} chunks). Ask me anything about it!"
+        summary = f"'{filename}' was indexed in {len(chunks)} chunks and is ready for questions."
 
         return {
             "filename": filename,

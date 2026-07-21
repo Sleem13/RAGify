@@ -71,13 +71,21 @@ class RetrievalTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             manager = VectorDBManager(Path(temp_dir) / "db", KeywordEmbeddings())
             manager.replace_file_chunks(
-                [Document(page_content="Refunds use the finance portal.")],
+                [
+                    Document(page_content="Refunds use the finance portal."),
+                    Document(page_content="Refund requests have a deadline."),
+                ],
                 "policy.txt",
             )
             self.assertEqual(
                 manager.hybrid_search("refund finance", top_k=3)[0]["metadata"]["source"],
                 "policy.txt",
             )
+            self.assertTrue(
+                manager.hybrid_search("summarize this", top_k=3),
+                "Positive semantic matches must not be discarded for broad prompts.",
+            )
+            self.assertEqual(len(manager._documents(manager._load_db())), 2)
 
             manager.replace_file_chunks(
                 [Document(page_content="Library access uses the proxy.")],
