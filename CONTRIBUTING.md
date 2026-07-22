@@ -1,27 +1,17 @@
 # Contributing to RAGify
 
-First off, thank you for considering contributing to RAGify! It's people like you that make RAGify such a great tool.
+## Development setup
 
-## How Can I Contribute?
+Follow the local Python and Node.js setup in [README.md](README.md). Run the FastAPI backend on port 9999 and the Next.js frontend on port 3000.
 
-### Reporting Bugs
-- Ensure the bug was not already reported by searching on GitHub under Issues.
-- If you're unable to find an open issue addressing the problem, open a new one. Be sure to include a title and clear description, as much relevant information as possible, and a code sample or an executable test case demonstrating the expected behavior that is not occurring.
+## Pull requests
 
-### Suggesting Enhancements
-- Open a new issue with a clear title and description of the suggested enhancement.
-- Explain why this enhancement would be useful to most users.
+1. Create a branch from `main`.
+2. Keep retrieval, application state, API routing, and UI concerns in their existing modules.
+3. Add or update tests when behavior changes.
+4. Update documentation when an API or setup step changes.
+5. Run the backend tests, frontend linter, and frontend production build.
 
-### Pull Requests
-1. Fork the repo and create your branch from `main`.
-2. If you've added code that should be tested, add tests.
-3. If you've changed APIs, update the documentation.
-4. Ensure the test suite passes.
-5. Issue that pull request!
+Python code should follow PEP 8. TypeScript code should pass the repository ESLint configuration.
 
-## Development Setup
-Please refer to the `README.md` for instructions on how to run the project locally using Docker or GitHub Codespaces.
-
-## Code Style
-- For Python backend code, we follow PEP 8. Please run `black` or your preferred formatter before submitting.
-- For TypeScript frontend code, we use Prettier and ESLint.
+Bug reports should include reproduction steps, expected behavior, actual behavior, and relevant logs without secrets or uploaded document contents.

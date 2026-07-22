@@ -61,7 +61,10 @@ export default function Dashboard() {
   });
 
   const [showApiKey, setShowApiKey] = useState(false);
-  const [generatedKey, setGeneratedKey] = useState('');
+  const [generatedKey, setGeneratedKey] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('ragify_api_key') || '';
+    return '';
+  });
   const [keyCopied, setKeyCopied] = useState(false);
   const [keyLoading, setKeyLoading] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
@@ -72,7 +75,10 @@ export default function Dashboard() {
     customApiUrl.trim() || process.env.NEXT_PUBLIC_API_URL || '/api/backend';
 
   const getAxiosConfig = () => ({
-    headers: { "Bypass-Tunnel-Reminder": "true" }
+    headers: {
+      "Bypass-Tunnel-Reminder": "true",
+      ...(generatedKey ? { "X-Api-Key": generatedKey } : {}),
+    }
   });
 
   const saveApiUrl = () => {
@@ -101,7 +107,10 @@ export default function Dashboard() {
     try {
       const apiUrl = customApiUrl.trim() || process.env.NEXT_PUBLIC_API_URL || '/api/backend';
       const res = await axios.get(`${apiUrl}/files`, {
-        headers: { "Bypass-Tunnel-Reminder": "true" }
+        headers: {
+          "Bypass-Tunnel-Reminder": "true",
+          ...(generatedKey ? { "X-Api-Key": generatedKey } : {}),
+        }
       });
       setIndexedFiles(res.data.files || {});
       const hasExcel = Object.values(res.data.files || {}).some(
@@ -111,7 +120,7 @@ export default function Dashboard() {
     } catch {
       // Backend might not be up yet
     }
-  }, [customApiUrl]);
+  }, [customApiUrl, generatedKey]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void fetchFiles(), 0);
@@ -134,6 +143,7 @@ export default function Dashboard() {
     try {
       const res = await axios.post(`${getApiUrl()}/generate-api-key`, {}, getAxiosConfig());
       setGeneratedKey(res.data.api_key);
+      localStorage.setItem('ragify_api_key', res.data.api_key);
     } catch {
       setGeneratedKey('Error: Could not connect to backend.');
     }

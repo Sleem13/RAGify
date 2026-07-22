@@ -4,6 +4,12 @@ const backendUrl = process.env.BACKEND_URL || "http://localhost:9999";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    // PDF extraction and local embedding can take longer than Next's 30s proxy default.
+    proxyTimeout: 180_000,
+    // Keep multipart uploads compatible with the backend's 50 MB file limit.
+    proxyClientMaxBodySize: "55mb",
+  },
   async rewrites() {
     return [
       {
