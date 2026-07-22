@@ -3,14 +3,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import require_api_key
-from services.app_state import app_state
-
-
 router = APIRouter(tags=["API Key"])
 
 
 @router.post("/generate-api-key", dependencies=[Depends(require_api_key)])
 def generate_api_key():
+    from services.app_state import app_state
+
     key = app_state.api_keys.generate()
     return {
         "api_key": key,
@@ -20,12 +19,16 @@ def generate_api_key():
 
 @router.get("/list-api-keys", dependencies=[Depends(require_api_key)])
 def list_api_keys():
+    from services.app_state import app_state
+
     masked = app_state.api_keys.masked()
     return {"active_keys": masked, "total": len(masked)}
 
 
 @router.delete("/revoke-api-key", dependencies=[Depends(require_api_key)])
 def revoke_api_key(api_key: str):
+    from services.app_state import app_state
+
     if app_state.api_keys.revoke(api_key):
         return {"message": "API key revoked successfully."}
     raise HTTPException(status_code=404, detail="API key not found.")

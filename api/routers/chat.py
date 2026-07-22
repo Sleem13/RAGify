@@ -6,10 +6,7 @@ import logging
 from fastapi import APIRouter, Depends, Form, HTTPException
 
 from api.dependencies import require_api_key
-from services.app_state import app_state
-from services.llm_manager import llm_manager
 from services.retrieval import build_context, build_grounded_prompt, normalize_history
-from services.vector_db import vector_db
 
 
 logger = logging.getLogger(__name__)
@@ -18,6 +15,10 @@ router = APIRouter(tags=["Chat"])
 
 @router.post("/chat", dependencies=[Depends(require_api_key)])
 async def chat(message: str = Form(...), history: str = Form(default="[]")):
+    from services.app_state import app_state
+    from services.llm_manager import llm_manager
+    from services.vector_db import vector_db
+
     message = message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")

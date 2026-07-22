@@ -7,14 +7,13 @@ from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import StreamingResponse
 
 from api.dependencies import require_api_key
-from services.exporter import export_analytics
-
-
 router = APIRouter(tags=["Export"])
 
 
 @router.post("/export", dependencies=[Depends(require_api_key)])
 async def export_data(format: str = Form("json"), data: str = Form(...)):
+    from services.exporter import export_analytics
+
     try:
         parsed = json.loads(data)
     except json.JSONDecodeError as exc:

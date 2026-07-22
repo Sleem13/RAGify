@@ -7,24 +7,33 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from api.dependencies import require_api_key
 from core.config import settings
-from services.app_state import app_state
-from services.document_processor import document_processor
-from services.ingestion import ingestion_service
-from services.job_store import job_store
-from services.vector_db import vector_db
-
-
 router = APIRouter(tags=["Documents"])
+
+
+class _LazyIngestionService:
+    """Keep the existing patch point without importing the RAG stack eagerly."""
+
+    def __getattr__(self, name: str):
+        from services.ingestion import ingestion_service as service
+
+        return getattr(service, name)
+
+
+ingestion_service = _LazyIngestionService()
 
 
 @router.get("/files", dependencies=[Depends(require_api_key)])
 def list_files():
+    from services.app_state import app_state
+
     files = app_state.registry.snapshot()
     return {"files": files, "total": len(files)}
 
 
 @router.get("/jobs/{job_id}", dependencies=[Depends(require_api_key)])
 def get_ingestion_job(job_id: str):
+    from services.job_store import job_store
+
     job = job_store.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Ingestion job not found.")
@@ -33,6 +42,9 @@ def get_ingestion_job(job_id: str):
 
 @router.delete("/files/{filename}", dependencies=[Depends(require_api_key)])
 def delete_file(filename: str):
+    from services.app_state import app_state
+    from services.vector_db import vector_db
+
     if filename not in app_state.registry:
         raise HTTPException(status_code=404, detail=f"File '{filename}' not found in registry.")
 
@@ -50,6 +62,8 @@ def delete_file(filename: str):
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_file(file: UploadFile = File(...)):
+    from services.document_processor import document_processor
+
     filename = Path(file.filename or "unknown").name
     extension = Path(filename).suffix.lower()
     supported = extension in settings.excel_extensions or document_processor.is_supported(filename)

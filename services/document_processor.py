@@ -3,6 +3,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 import asyncio
 import os
+from pathlib import Path
 import tempfile
 import logging
 import base64
@@ -44,7 +45,7 @@ class DocumentProcessor:
             return default
 
     async def process_file(self, file_bytes: bytes, filename: str):
-        ext = os.path.splitext(filename)[1].lower()
+        ext = Path(filename).suffix.lower()
 
         if not self.is_supported(filename):
             raise ValueError(
@@ -70,22 +71,22 @@ class DocumentProcessor:
         # ── 4. Standard Document Processing (DOCX, TXT) ───────────────────────
         else:
             loader_class = SUPPORTED_EXTENSIONS[ext]
-            temp_file_path = None
+            temp_file_path: Path | None = None
             with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
                 tmp.write(file_bytes)
-                temp_file_path = tmp.name
+                temp_file_path = Path(tmp.name)
 
             try:
                 if ext == ".txt":
-                    loader = loader_class(temp_file_path, encoding="utf-8")
+                    loader = loader_class(str(temp_file_path), encoding="utf-8")
                 else:
-                    loader = loader_class(temp_file_path)
+                    loader = loader_class(str(temp_file_path))
                 documents = loader.load()
                 for doc in documents:
                     doc.metadata["source"] = filename
             finally:
-                if temp_file_path and os.path.exists(temp_file_path):
-                    os.remove(temp_file_path)
+                if temp_file_path:
+                    temp_file_path.unlink(missing_ok=True)
 
         # ── Chunking ──────────────────────────────────────────────────────────
         documents = [doc for doc in documents if doc.page_content.strip()]
@@ -238,7 +239,7 @@ class DocumentProcessor:
 
     @staticmethod
     def is_supported(filename: str) -> bool:
-        ext = os.path.splitext(filename)[1].lower()
+        ext = Path(filename).suffix.lower()
         return ext in SUPPORTED_EXTENSIONS or ext in IMAGE_EXTENSIONS or ext in PPT_EXTENSIONS or ext in PDF_EXTENSIONS
 
     async def process_excel_for_rag(self, file_bytes: bytes, filename: str):
@@ -249,12 +250,12 @@ class DocumentProcessor:
         import pandas as pd
         import tempfile
 
-        ext = os.path.splitext(filename)[1].lower()
-        temp_file_path = None
+        ext = Path(filename).suffix.lower()
+        temp_file_path: Path | None = None
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             tmp.write(file_bytes)
-            temp_file_path = tmp.name
+            temp_file_path = Path(tmp.name)
 
         try:
             if ext == ".csv":
@@ -323,8 +324,8 @@ class DocumentProcessor:
             logger.error(f"Failed to convert Excel to RAG: {exc}")
             raise ValueError(f"Failed to convert spreadsheet for retrieval: {exc}") from exc
         finally:
-            if temp_file_path and os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
+            if temp_file_path:
+                temp_file_path.unlink(missing_ok=True)
 
 # Singleton
 document_processor = DocumentProcessor()

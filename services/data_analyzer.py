@@ -1,6 +1,6 @@
 import pandas as pd
 import tempfile
-import os
+from pathlib import Path
 import logging
 import json
 import asyncio
@@ -30,12 +30,12 @@ class DataAnalyzer:
         return await asyncio.to_thread(self._analyze_excel_sync, file_bytes, filename)
 
     def _analyze_excel_sync(self, file_bytes: bytes, filename: str) -> dict:
-        ext = os.path.splitext(filename)[1].lower()
-        temp_file_path = None
+        ext = Path(filename).suffix.lower()
+        temp_file_path: Path | None = None
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             tmp.write(file_bytes)
-            temp_file_path = tmp.name
+            temp_file_path = Path(tmp.name)
 
         try:
             # ── Read file ─────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ class DataAnalyzer:
             raise
 
         finally:
-            if temp_file_path and os.path.exists(temp_file_path):
-                os.remove(temp_file_path)
+            if temp_file_path:
+                temp_file_path.unlink(missing_ok=True)
 
 data_analyzer = DataAnalyzer()
