@@ -15,6 +15,7 @@ env/
 .env
 .env.local
 .env.production
+.streamlit/secrets.toml
 
 # ── Node / Next.js ────────────────────────────────────────────────────────────
 node_modules/

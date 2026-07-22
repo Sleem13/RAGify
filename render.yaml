@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: ragify-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-9999}
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: FRONTEND_URL
+        value: https://sleem13.github.io,https://pharorag.streamlit.app
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: RAGIFY_EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
+      - key: RAGIFY_MIN_SEMANTIC_SCORE
+        value: "0.18"
+      - key: RAGIFY_LLM_TIMEOUT
+        value: "45"
+      - key: RAGIFY_MAX_PDF_IMAGES
+        value: "4"
+      - key: RAGIFY_PDF_IMAGE_TIMEOUT
+        value: "20"
+      - key: RAGIFY_PDF_IMAGE_CONCURRENCY
+        value: "2"

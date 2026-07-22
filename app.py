@@ -14,6 +14,7 @@ st.set_page_config(
 )
 
 DEFAULT_BACKEND_URL = os.getenv("RAGIFY_BACKEND_URL", "http://localhost:9999")
+DEFAULT_API_KEY = os.getenv("RAGIFY_API_KEY", "")
 WELCOME_MESSAGE = (
     "Welcome to the House of Knowledge. Upload a source, then ask me to uncover "
     "facts, themes, comparisons, and evidence from your archive."
@@ -184,7 +185,7 @@ def ask_question(
 def init_session_state() -> None:
     defaults = {
         "backend_url": DEFAULT_BACKEND_URL,
-        "api_key": "",
+        "api_key": DEFAULT_API_KEY,
         "messages": [{"role": "assistant", "content": WELCOME_MESSAGE}],
     }
     for key, value in defaults.items():
