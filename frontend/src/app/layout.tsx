@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RAGify — Intelligent Document & Data Analysis",
+  title: "RAGify — Ancient Knowledge, Modern Intelligence",
   description:
-    "Upload PDFs, Word documents, or Excel files and let AI analyze, summarize, and answer questions about your data instantly. Powered by Gemini and Groq.",
+    "Explore your documents with an Ancient Egypt-inspired AI research experience.",
 };
 
 export default function RootLayout({
@@ -30,7 +30,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
+      <body className="min-h-full flex flex-col bg-[#f8efd8] dark:bg-[#061521] text-[#20180f] dark:text-[#f8eccf] transition-colors duration-300">
         <AppProvider>
           {children}
         </AppProvider>

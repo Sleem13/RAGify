@@ -80,31 +80,61 @@ class FileRegistry:
 
 
 class ApiKeyStore:
-    """In-memory API keys; an empty store intentionally means open mode."""
+    """Persist only API-key digests; an empty store intentionally means open mode."""
 
-    def __init__(self):
-        self._keys: set[str] = set()
+    def __init__(self, path: Path = settings.api_keys_path):
+        self.path = path
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._keys: dict[str, dict[str, str]] = self._load()
         self._lock = threading.RLock()
+
+    @staticmethod
+    def _digest(key: str) -> str:
+        import hashlib
+
+        return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+    def _load(self) -> dict[str, dict[str, str]]:
+        if not self.path.exists():
+            return {}
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            return payload if isinstance(payload, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Could not read API-key store; starting in open mode.")
+            return {}
+
+    def _save(self) -> None:
+        temporary_path = self.path.with_suffix(f"{self.path.suffix}.tmp")
+        temporary_path.write_text(
+            json.dumps(self._keys, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        os.replace(temporary_path, self.path)
 
     def generate(self) -> str:
         with self._lock:
             key = f"ragify-{secrets.token_urlsafe(32)}"
-            self._keys.add(key)
+            self._keys[self._digest(key)] = {
+                "masked": f"{key[:12]}...{key[-4:]}",
+            }
+            self._save()
             return key
 
     def verify(self, candidate: str | None) -> bool:
         with self._lock:
-            return not self._keys or candidate in self._keys
+            return not self._keys or bool(candidate and self._digest(candidate) in self._keys)
 
     def masked(self) -> list[str]:
         with self._lock:
-            return [f"{key[:12]}...{key[-4:]}" for key in sorted(self._keys)]
+            return sorted(entry["masked"] for entry in self._keys.values())
 
     def revoke(self, key: str) -> bool:
         with self._lock:
-            if key not in self._keys:
+            digest = self._digest(key)
+            if digest not in self._keys:
                 return False
-            self._keys.remove(key)
+            del self._keys[digest]
+            self._save()
             return True
 
 

@@ -1,12 +1,12 @@
 # RAGify
 
-RAGify is a local retrieval-augmented generation application for documents and spreadsheets. It supports grounded chat, source citations, multi-file indexing, spreadsheet analysis, dashboard generation, exports, English/Arabic layouts, and multiple LLM providers.
+RAGify is a local retrieval-augmented generation application for documents and spreadsheets. It supports grounded chat, page-level citations, durable background ingestion, spreadsheet analysis, dashboard generation, exports, English/Arabic layouts, and multiple LLM providers. Its Next.js interface uses an Ancient Egypt-inspired House of Knowledge design system.
 
 ## RAG pipeline
 
 The backend follows clear SimpleRAG-style stages while preserving RAGify's features:
 
-1. `services/document_processor.py` loads PDF, Office, image, text, and tabular files into metadata-rich chunks.
+1. `services/document_processor.py` loads PDF, Office, image, text, and tabular files into metadata-rich chunks. PDF chunks retain page numbers.
 2. `services/preprocessing.py` normalizes text for lexical retrieval while preserving multilingual content and negation.
 3. `services/vector_db.py` persists MiniLM embeddings in FAISS and combines semantic and lexical scores.
 4. `services/retrieval.py` selects diverse results, prepares numbered sources, validates history, and builds a grounded prompt.
@@ -19,6 +19,10 @@ The application layer is separated from the pipeline:
 - `core/config.py` owns environment-backed settings.
 - `services/app_state.py` owns the thread-safe file registry and API-key state.
 - `services/exporter.py` owns JSON, CSV, XLSX, and PDF exports.
+- `services/ingestion.py` coordinates asynchronous extraction, embedding, registry commit, and rollback.
+- `services/job_store.py` persists upload job status for frontend progress polling.
+
+Uploads return HTTP 202 with a `job_id`. Poll `GET /jobs/{job_id}` until the status is `completed` or `failed`. The web interface handles this automatically.
 
 ## Requirements
 
@@ -73,6 +77,7 @@ The Streamlit app defaults to `http://localhost:9999`. Override it with `RAGIFY_
 
 ```powershell
 python -m unittest discover -s tests -v
+python evaluation\run_retrieval_eval.py
 cd frontend
 npm run lint
 npm run build
@@ -80,7 +85,7 @@ npm run build
 
 ## Local data
 
-Uploaded content is indexed under `vectorstore/`, and file metadata is kept in `data/files_registry.json`. Both are runtime data, not source code. Use the app's reset action only when you intentionally want to clear the index.
+Uploaded content is indexed under `vectorstore/`, and file metadata is kept in `data/files_registry.json`. Ingestion jobs and hashed API keys are stored under `data/` but ignored by Git. Plain API keys are never persisted. Use the app's reset action only when you intentionally want to clear the index.
 
 ## License
 

@@ -16,12 +16,12 @@ interface AppContextType {
 const translations = {
   en: {
     // Navbar
-    appName: "RAGify",
+    appName: "RAGify · House of Knowledge",
     getStarted: "Launch App",
     navFeatures: "Features",
     navHow: "How it works",
     // Hero
-    heroTag: "AI-Powered Document Intelligence",
+    heroTag: "Ancient Knowledge · Modern Intelligence",
     subtitle: "The Smartest Document & Data Analysis System",
     titleLine1: "Understand Your Data",
     titleLine2: "Like Never Before",
@@ -44,16 +44,16 @@ const translations = {
     // Features
     featuresTitle: "Everything You Need",
     featuresSubtitle: "A complete AI document intelligence platform, running 100% on your machine.",
-    feature1Title: "Limitless Reading",
-    feature1Desc: "Upload any file size. The system has a permanent memory to analyze and retrieve every character.",
+    feature1Title: "Digital Scribe",
+    feature1Desc: "Index PDFs, Office files, images, and datasets through a durable document pipeline.",
     feature2Title: "Data Analytics",
     feature2Desc: "Upload Excel files and we will generate professional, interactive, and downloadable dashboards instantly.",
-    feature3Title: "Zero Downtime",
-    feature3Desc: "Auto-fallback system between top models ensures 24/7 free uptime.",
+    feature3Title: "Resilient Intelligence",
+    feature3Desc: "Provider fallbacks and bounded timeouts keep research sessions dependable.",
     feature4Title: "Conversational AI",
     feature4Desc: "Ask natural language questions about your documents and receive accurate, context-aware answers.",
-    feature5Title: "100% Local & Private",
-    feature5Desc: "Your data never leaves your machine. FAISS runs locally with no cloud dependency.",
+    feature5Title: "Local Knowledge Vault",
+    feature5Desc: "Document embeddings and the FAISS index stay local; configured AI providers receive only retrieved context.",
     feature6Title: "Multi-Language",
     feature6Desc: "Full Arabic and English support with dynamic RTL layout switching.",
     // CTA
@@ -63,7 +63,7 @@ const translations = {
     ctaBenefit2: "100% Local & Private",
     ctaBenefit3: "Free Forever",
     // Footer
-    footerText: "© 2025 RAGify. Built with Next.js & FastAPI.",
+    footerText: "RAGify · A modern House of Knowledge.",
     // Dashboard
     uploadFiles: "Upload Files",
     clickToSelect: "Click to select a file",

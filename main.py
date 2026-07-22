@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import time
+from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -29,6 +31,32 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @application.middleware("http")
+    async def request_observability(request: Request, call_next):
+        request_id = request.headers.get("X-Request-Id") or uuid4().hex
+        started = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            logging.getLogger("ragify.request").exception(
+                "request_failed request_id=%s method=%s path=%s duration_ms=%.1f",
+                request_id,
+                request.method,
+                request.url.path,
+                (time.perf_counter() - started) * 1000,
+            )
+            raise
+        response.headers["X-Request-Id"] = request_id
+        logging.getLogger("ragify.request").info(
+            "request_complete request_id=%s method=%s path=%s status=%s duration_ms=%.1f",
+            request_id,
+            request.method,
+            request.url.path,
+            response.status_code,
+            (time.perf_counter() - started) * 1000,
+        )
+        return response
     for router in (
         system.router,
         auth.router,

@@ -18,6 +18,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 
 from services.preprocessing import tokenize
+from filelock import FileLock
 
 try:
     from langchain_huggingface import HuggingFaceEmbeddings
@@ -45,6 +46,7 @@ class VectorDBManager:
         )
         self._cached_db: FAISS | None = None
         self._lock = threading.RLock()
+        self._process_lock = FileLock(str(self.db_path.parent / ".ragify-faiss.lock"))
         logger.info("Local hybrid FAISS manager initialized.")
 
     @property
@@ -139,15 +141,26 @@ class VectorDBManager:
         new_db = FAISS.from_documents(prepared_documents, self.embeddings)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = Path(tempfile.mkdtemp(prefix="ragify-faiss-", dir=self.db_path.parent))
+        backup_path = self.db_path.parent / f"{self.db_path.name}.backup"
         try:
             new_db.save_local(str(temp_path))
             (temp_path / "config.json").write_text(
                 json.dumps({"embedding_model": self.model_name}, indent=2),
                 encoding="utf-8",
             )
-            if self.db_path.exists():
-                shutil.rmtree(self.db_path)
-            os.replace(temp_path, self.db_path)
+            with self._process_lock:
+                if backup_path.exists():
+                    shutil.rmtree(backup_path)
+                if self.db_path.exists():
+                    os.replace(self.db_path, backup_path)
+                try:
+                    os.replace(temp_path, self.db_path)
+                except Exception:
+                    if backup_path.exists() and not self.db_path.exists():
+                        os.replace(backup_path, self.db_path)
+                    raise
+                if backup_path.exists():
+                    shutil.rmtree(backup_path)
         finally:
             if temp_path.exists():
                 shutil.rmtree(temp_path)
@@ -176,6 +189,17 @@ class VectorDBManager:
     def replace_file_chunks(self, chunks: list[Document], filename: str) -> None:
         with self._lock:
             self._replace_file_chunks(chunks, filename)
+
+    def documents_for_filename(self, filename: str) -> list[Document]:
+        with self._lock:
+            return [
+                Document(
+                    page_content=document.page_content,
+                    metadata=dict(document.metadata),
+                )
+                for document in self._documents(self._load_db())
+                if document.metadata.get("source") == filename
+            ]
 
     def add_chunks(self, chunks: list[Document], filename: str = "unknown") -> None:
         """Compatibility alias; uploads replace prior chunks from the same file."""
@@ -229,10 +253,8 @@ class VectorDBManager:
             return []
 
         query_tokens = tokenize(query_text)
-        lexical_raw = self._bm25_scores(
-            query_tokens,
-            [tokenize(document.page_content) for document in documents],
-        )
+        tokenized_corpus = [tokenize(document.page_content) for document in documents]
+        lexical_raw = self._bm25_scores(query_tokens, tokenized_corpus)
         lexical = self._min_max(lexical_raw)
 
         semantic_by_key: dict[tuple[str, int, str], float] = {}
@@ -260,11 +282,18 @@ class VectorDBManager:
             for document in documents
         ]
         semantic = self._min_max(semantic_raw)
+        minimum_semantic_score = float(os.getenv("RAGIFY_MIN_SEMANTIC_SCORE", "0.18"))
 
         ranked: list[dict[str, Any]] = []
+        minimum_lexical_overlap = 1 if len(set(query_tokens)) <= 2 else 2
         for index, document in enumerate(documents):
             # Ignore wholly unrelated candidates instead of forcing arbitrary context.
-            if lexical_raw[index] <= 0 and semantic_raw[index] <= 0:
+            lexical_overlap = len(set(query_tokens).intersection(tokenized_corpus[index]))
+            lexical_relevant = (
+                lexical_raw[index] > 0
+                and lexical_overlap >= minimum_lexical_overlap
+            )
+            if not lexical_relevant and semantic_raw[index] < minimum_semantic_score:
                 continue
             score = (1 - semantic_weight) * lexical[index] + semantic_weight * semantic[index]
             if document.metadata.get("is_current", True):

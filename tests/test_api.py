@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -27,6 +28,7 @@ class ApiContractTests(unittest.TestCase):
                 "/files",
                 "/files/{filename}",
                 "/generate-api-key",
+                "/jobs/{job_id}",
                 "/list-api-keys",
                 "/reset",
                 "/revoke-api-key",
@@ -55,6 +57,26 @@ class ApiContractTests(unittest.TestCase):
         self.assertEqual(response.json(), payload)
         self.assertIn("ragify_export.json", response.headers["content-disposition"])
 
+    def test_upload_returns_an_ingestion_job(self) -> None:
+        queued = {
+            "id": "job-123",
+            "status": "queued",
+            "stage": "queued",
+            "progress": 5,
+        }
+        def fake_enqueue(path: Path, filename: str):
+            self.assertEqual(filename, "notes.txt")
+            path.unlink(missing_ok=True)
+            return queued
+
+        with patch("api.routers.documents.ingestion_service.enqueue", side_effect=fake_enqueue):
+            response = self.client.post(
+                "/upload",
+                files={"file": ("notes.txt", b"Ancient archive notes", "text/plain")},
+            )
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["job_id"], "job-123")
+
     def test_export_rejects_unknown_format(self) -> None:
         response = self.client.post(
             "/export",
@@ -65,13 +87,17 @@ class ApiContractTests(unittest.TestCase):
 
 class ApiKeyStoreTests(unittest.TestCase):
     def test_store_is_open_until_a_key_is_generated(self) -> None:
-        store = ApiKeyStore()
-        self.assertTrue(store.verify(None))
-        key = store.generate()
-        self.assertFalse(store.verify(None))
-        self.assertTrue(store.verify(key))
-        self.assertTrue(store.revoke(key))
-        self.assertTrue(store.verify(None))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "keys.json"
+            store = ApiKeyStore(path)
+            self.assertTrue(store.verify(None))
+            key = store.generate()
+            self.assertFalse(store.verify(None))
+            self.assertTrue(store.verify(key))
+            self.assertFalse(key in path.read_text(encoding="utf-8"))
+            self.assertTrue(ApiKeyStore(path).verify(key))
+            self.assertTrue(store.revoke(key))
+            self.assertTrue(store.verify(None))
 
 
 class ExtractedServiceTests(unittest.TestCase):

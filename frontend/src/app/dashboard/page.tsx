@@ -5,11 +5,13 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   UploadCloud, MessageSquare, BarChart3, Send, Settings, Check,
-  Sun, Moon, Languages, Home, Key, Copy, Trash2, RefreshCw,
+  Key, Copy, Trash2, RefreshCw,
   FileText, FileSpreadsheet, Image as ImageIcon, X, FolderOpen, ChevronRight, Plus
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAppContext } from '@/context/AppContext';
+import { BrandMark } from '@/components/BrandMark';
+import { ThemeControls } from '@/components/ThemeControls';
 
 interface Message {
   role: 'user' | 'system';
@@ -24,47 +26,47 @@ interface IndexedFile {
   charts?: number;
 }
 
+interface IngestionJob {
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  stage: string;
+  progress: number;
+  error?: string | null;
+  result?: {
+    type: 'document' | 'excel';
+    message: string;
+    analysis?: unknown;
+  } | null;
+}
+
 export default function Dashboard() {
-  const { t, theme, toggleTheme, language, toggleLanguage } = useAppContext();
+  const { t, language } = useAppContext();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Multi-file support
   const [files, setFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [uploadStage, setUploadStage] = useState<Record<string, string>>({});
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
 
   // Messages with localStorage persistence
-  const [messages, setMessages] = useState<Message[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('ragify_chat_history');
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return [{ role: 'system', content: 'Hello! Upload your files and I will be ready to answer your questions or analyze your data.', timestamp: Date.now() }];
-  });
+  const [messages, setMessages] = useState<Message[]>([
+    { role: 'system', content: 'Hello! Upload your files and I will be ready to answer your questions or analyze your data.' }
+  ]);
+  const [storageReady, setStorageReady] = useState(false);
 
   // File registry from backend
   const [indexedFiles, setIndexedFiles] = useState<Record<string, IndexedFile>>({});
-  const [hasExcelData, setHasExcelData] = useState(
-    () => typeof window !== 'undefined' && Boolean(localStorage.getItem('excel_analysis'))
-  );
+  const [hasExcelData, setHasExcelData] = useState(false);
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
   const [showSettings, setShowSettings] = useState(false);
-  const [customApiUrl, setCustomApiUrl] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('custom_api_url') || '';
-    return '';
-  });
+  const [customApiUrl, setCustomApiUrl] = useState('');
 
   const [showApiKey, setShowApiKey] = useState(false);
-  const [generatedKey, setGeneratedKey] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('ragify_api_key') || '';
-    return '';
-  });
+  const [generatedKey, setGeneratedKey] = useState('');
   const [keyCopied, setKeyCopied] = useState(false);
   const [keyLoading, setKeyLoading] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
@@ -89,17 +91,31 @@ export default function Dashboard() {
   // ── Scroll to bottom ──────────────────────────────────────────────────────
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const savedMessages = localStorage.getItem('ragify_chat_history');
+        if (savedMessages) setMessages(JSON.parse(savedMessages));
+      } catch {}
+      setHasExcelData(Boolean(localStorage.getItem('excel_analysis')));
+      setCustomApiUrl(localStorage.getItem('custom_api_url') || '');
+      setGeneratedKey(localStorage.getItem('ragify_api_key') || '');
+      setStorageReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
   // ── Persist chat to localStorage ──────────────────────────────────────────
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (storageReady) {
       const toSave = messages.slice(-50);
       localStorage.setItem('ragify_chat_history', JSON.stringify(toSave));
     }
-  }, [messages]);
+  }, [messages, storageReady]);
 
   // ── Fetch indexed files from backend ─────────────────────────────────────
 
@@ -183,6 +199,25 @@ export default function Dashboard() {
     setFiles(prev => prev.filter(f => f.name !== name));
   };
 
+  const waitForIngestion = async (jobId: string, filename: string) => {
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      const response = await axios.get<IngestionJob>(
+        `${getApiUrl()}/jobs/${encodeURIComponent(jobId)}`,
+        getAxiosConfig(),
+      );
+      const job = response.data;
+      setUploadStage(prev => ({ ...prev, [filename]: job.stage }));
+      setUploadProgress(prev => ({
+        ...prev,
+        [filename]: Math.min(100, 20 + Math.round(job.progress * 0.8)),
+      }));
+      if (job.status === 'completed' && job.result) return job.result;
+      if (job.status === 'failed') throw new Error(job.error || 'Document processing failed.');
+      await new Promise(resolve => window.setTimeout(resolve, 1000));
+    }
+    throw new Error('Document processing did not finish within 10 minutes.');
+  };
+
   // ── File upload (multi-file with progress) ────────────────────────────────
 
   const handleUpload = async () => {
@@ -192,6 +227,7 @@ export default function Dashboard() {
     for (const file of files) {
       setUploadingFile(file.name);
       setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
+      setUploadStage(prev => ({ ...prev, [file.name]: 'uploading' }));
       const formData = new FormData();
       formData.append('file', file);
 
@@ -199,18 +235,19 @@ export default function Dashboard() {
         const res = await axios.post(`${getApiUrl()}/upload`, formData, {
           ...getAxiosConfig(),
           onUploadProgress: (e) => {
-            const pct = e.total ? Math.round((e.loaded * 100) / e.total) : 0;
+            const pct = e.total ? Math.round((e.loaded * 20) / e.total) : 0;
             setUploadProgress(prev => ({ ...prev, [file.name]: pct }));
           },
         });
+        const result = await waitForIngestion(res.data.job_id, file.name);
         setMessages(prev => [...prev, {
           role: 'system',
-          content: res.data.message || `✅ '${file.name}' uploaded successfully.`,
+          content: result.message || `'${file.name}' uploaded successfully.`,
           timestamp: Date.now()
         }]);
-        if (res.data.type === 'excel') {
+        if (result.type === 'excel' && result.analysis) {
           setHasExcelData(true);
-          localStorage.setItem('excel_analysis', JSON.stringify(res.data.analysis));
+          localStorage.setItem('excel_analysis', JSON.stringify(result.analysis));
         }
       } catch (error: unknown) {
         let detail = 'The upload could not be completed.';
@@ -230,6 +267,7 @@ export default function Dashboard() {
 
     setFiles([]);
     setUploadProgress({});
+    setUploadStage({});
     setUploadingFile(null);
     await fetchFiles();
     setLoading(false);
@@ -321,31 +359,20 @@ export default function Dashboard() {
   const fileCount = Object.keys(indexedFiles).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
+    <div className="egypt-shell min-h-screen text-[#20180f] dark:text-[#f8eccf] transition-colors duration-300">
 
       {/* Header */}
-      <div className="border-b border-gray-200 dark:border-white/10 bg-white dark:bg-slate-900/80 backdrop-blur-sm sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 h-14 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-2 text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-600 hover:opacity-80 transition-opacity">
-            <Home className="w-5 h-5 text-indigo-500" />
-            {t('appName')}
-          </Link>
-          <div className="flex gap-2">
-            <button onClick={toggleLanguage} className="p-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors text-gray-600 dark:text-gray-400 flex items-center gap-1.5 text-sm font-medium px-3">
-              <Languages className="w-4 h-4" />
-              {language === 'en' ? 'عربي' : 'EN'}
-            </button>
-            <button onClick={toggleTheme} className="p-2 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 rounded-lg transition-colors text-gray-600 dark:text-gray-400">
-              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-          </div>
+      <div className="hieroglyph-band border-b border-[#b98332]/25 bg-[#fff9e8]/90 dark:bg-[#061521]/90 backdrop-blur-sm sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 md:px-6 h-20 flex justify-between items-center">
+          <Link href="/" className="hover:opacity-80 transition-opacity"><BrandMark /></Link>
+          <ThemeControls />
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-4 md:p-6 flex flex-col md:flex-row gap-5" style={{ height: 'calc(100vh - 56px)' }}>
+      <div className="max-w-7xl mx-auto p-4 md:p-6 flex flex-col md:flex-row gap-5" style={{ height: 'calc(100vh - 80px)' }}>
 
         {/* ── Sidebar ── */}
-        <div className="w-full md:w-80 flex-shrink-0 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex flex-col gap-4 overflow-y-auto shadow-sm">
+        <div className="papyrus-panel w-full md:w-80 flex-shrink-0 rounded-2xl p-5 flex flex-col gap-4 overflow-y-auto">
 
           {/* Upload Area */}
           <div>
@@ -397,7 +424,7 @@ export default function Dashboard() {
                       )}
                       {uploadingFile === file.name && (
                         <p className="text-[10px] text-indigo-400 mt-0.5">
-                          {uploadProgress[file.name] ?? 0}%
+                          {uploadStage[file.name] || 'uploading'} · {uploadProgress[file.name] ?? 0}%
                         </p>
                       )}
                     </div>
@@ -416,7 +443,7 @@ export default function Dashboard() {
             <button
               onClick={handleUpload}
               disabled={!files.length || loading}
-              className="mt-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold py-2.5 px-4 rounded-xl transition-colors w-full flex items-center justify-center gap-2 text-sm"
+              className="gold-button mt-3 disabled:opacity-40 font-bold py-2.5 px-4 rounded-xl transition-all w-full flex items-center justify-center gap-2 text-sm"
             >
               {loading && uploadingFile
                 ? <><RefreshCw className="w-4 h-4 animate-spin" /> {t('uploading')}</>
@@ -521,7 +548,7 @@ export default function Dashboard() {
         </div>
 
         {/* ── Chat Area ── */}
-        <div className="flex-1 min-w-0 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-xl dark:shadow-indigo-900/20">
+        <div className="papyrus-panel flex-1 min-w-0 rounded-2xl flex flex-col overflow-hidden">
 
           {/* Chat Header */}
           <div className="p-4 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 flex items-center justify-between flex-shrink-0">

@@ -22,6 +22,7 @@ class FallbackLLMManager:
 
     def __init__(self):
         self.providers: list[dict] = []
+        self.request_timeout = max(5, int(os.getenv("RAGIFY_LLM_TIMEOUT", "45")))
         self._build_providers()
 
         if not self.providers:
@@ -92,7 +93,10 @@ class FallbackLLMManager:
             llm  = provider["llm"]
             try:
                 logger.info(f"Attempting response with {name}...")
-                response = await llm.ainvoke([HumanMessage(content=prompt)])
+                response = await asyncio.wait_for(
+                    llm.ainvoke([HumanMessage(content=prompt)]),
+                    timeout=self.request_timeout,
+                )
                 logger.info(f"✓ Response received from {name}.")
                 return response.content
             except Exception as exc:

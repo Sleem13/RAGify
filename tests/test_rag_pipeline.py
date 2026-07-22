@@ -57,6 +57,13 @@ class RetrievalTests(unittest.TestCase):
         self.assertIn("[Source 1] a.txt", context)
         self.assertIn("[Source 3] b.txt", context)
 
+    def test_context_includes_pdf_page(self) -> None:
+        context, sources = build_context(
+            [{"text": "Temple record", "metadata": {"source": "archive.pdf", "page": 12}, "score": 0.9}]
+        )
+        self.assertIn("archive.pdf, page 12", context)
+        self.assertEqual(sources[0]["title"], "archive.pdf, page 12")
+
     def test_prompt_rejects_document_instructions(self) -> None:
         prompt = build_grounded_prompt(
             "What is the policy?",

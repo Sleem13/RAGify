@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Bar, Pie, Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -65,13 +65,19 @@ export default function AnalyticsDashboard() {
   const [exportLoading, setExportLoading] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
 
-  const [analysis] = useState<AnalysisData | null>(() => {
-    if (typeof window !== 'undefined') {
+  const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
+  const [storageReady, setStorageReady] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
       const data = localStorage.getItem('excel_analysis');
-      return data ? JSON.parse(data) : null;
-    }
-    return null;
-  });
+      if (data) {
+        try { setAnalysis(JSON.parse(data)); } catch {}
+      }
+      setStorageReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const getApiUrl = () => {
     const custom = typeof window !== 'undefined' ? localStorage.getItem('custom_api_url') || '' : '';
@@ -96,7 +102,12 @@ export default function AnalyticsDashboard() {
 
       const res = await fetch(`${getApiUrl()}/export`, {
         method: 'POST',
-        headers: { 'Bypass-Tunnel-Reminder': 'true' },
+        headers: {
+          'Bypass-Tunnel-Reminder': 'true',
+          ...(localStorage.getItem('ragify_api_key')
+            ? { 'X-Api-Key': localStorage.getItem('ragify_api_key') as string }
+            : {}),
+        },
         body: formData,
       });
 
@@ -129,11 +140,15 @@ export default function AnalyticsDashboard() {
     setExportLoading(false);
   };
 
+  if (!storageReady) {
+    return <div className="egypt-shell min-h-screen" />;
+  }
+
   if (!analysis) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-white flex flex-col items-center justify-center gap-4 transition-colors duration-300">
-        <LayoutDashboard className="w-16 h-16 text-indigo-500 mb-4" />
-        <h2 className="text-3xl font-bold">AI Analytics Dashboard</h2>
+      <div className="egypt-shell min-h-screen text-[#20180f] dark:text-[#f8eccf] flex flex-col items-center justify-center gap-4 transition-colors duration-300">
+        <LayoutDashboard className="w-16 h-16 text-[#d6a63a] mb-4" />
+        <h2 className="display-font text-3xl font-bold">Scribe Analytics Chamber</h2>
         <p className="text-xl text-gray-500">{t('noData') || 'No data available to analyze.'}</p>
         <Link href="/dashboard" className="text-indigo-600 dark:text-indigo-400 hover:underline mt-4 px-6 py-2 bg-indigo-500/10 rounded-full font-bold">
           Upload Data
@@ -154,7 +169,7 @@ export default function AnalyticsDashboard() {
   }] : []);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-slate-900 dark:text-white p-6 transition-colors duration-300 print:bg-white print:text-black">
+    <div className="egypt-shell min-h-screen text-[#20180f] dark:text-[#f8eccf] p-6 transition-colors duration-300 print:bg-white print:text-black">
       <div className="max-w-7xl mx-auto" ref={dashboardRef}>
 
         {/* Header */}
@@ -166,9 +181,9 @@ export default function AnalyticsDashboard() {
             >
               {language === 'ar' ? <ArrowRight className="w-5 h-5" /> : <ArrowLeft className="w-5 h-5" />}
             </Link>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <LayoutDashboard className="w-8 h-8 text-indigo-600" />
-              Executive Dashboard
+            <h1 className="display-font text-3xl font-bold flex items-center gap-3 text-[#123c69] dark:text-[#f3d77b]">
+              <LayoutDashboard className="w-8 h-8 text-[#d6a63a]" />
+              Scribe Analytics Chamber
             </h1>
           </div>
 
@@ -177,7 +192,7 @@ export default function AnalyticsDashboard() {
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
               disabled={exportLoading}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl transition-colors font-bold shadow-lg shadow-indigo-500/30"
+              className="gold-button flex items-center gap-2 disabled:opacity-50 px-5 py-2.5 rounded-xl transition-all font-bold"
             >
               <Download className="w-5 h-5" />
               {exportLoading ? 'Processing...' : 'Export Dashboard'}
@@ -222,7 +237,7 @@ export default function AnalyticsDashboard() {
         </div>
 
         {/* AI Insights Banner */}
-        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-2xl p-6 mb-8 text-white shadow-lg print:border print:border-gray-300 print:text-black print:bg-none print:shadow-none">
+        <div className="bg-gradient-to-r from-[#123c69] to-[#168c8c] rounded-2xl border border-[#d6a63a]/30 p-6 mb-8 text-white shadow-lg print:border print:border-gray-300 print:text-black print:bg-none print:shadow-none">
           <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
             ✨ AI Executive Insights
           </h3>

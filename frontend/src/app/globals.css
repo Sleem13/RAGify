@@ -2,9 +2,20 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --papyrus: #f4e4bd;
+  --papyrus-light: #fff9e8;
+  --sandstone: #c9964b;
+  --gold: #d6a63a;
+  --gold-light: #f3d77b;
+  --lapis: #123c69;
+  --lapis-deep: #071a2f;
+  --turquoise: #168c8c;
+  --ink: #20180f;
+  --background: #f8efd8;
+  --foreground: #20180f;
 }
+
+.dark { --background: #061521; --foreground: #f8eccf; }
 
 @theme inline {
   --color-background: var(--background);
@@ -13,15 +24,76 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+* { scrollbar-color: var(--gold) transparent; }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.display-font {
+  font-family: Georgia, "Times New Roman", serif;
+  letter-spacing: 0.025em;
+}
+
+.egypt-shell {
+  background-color: #f8efd8;
+  background-image:
+    radial-gradient(circle at 15% 10%, rgba(214, 166, 58, 0.18), transparent 28rem),
+    radial-gradient(circle at 88% 18%, rgba(22, 140, 140, 0.13), transparent 24rem),
+    linear-gradient(rgba(110, 72, 24, 0.035) 1px, transparent 1px);
+  background-size: auto, auto, 100% 6px;
+}
+
+.dark .egypt-shell {
+  background-color: #061521;
+  background-image:
+    radial-gradient(circle at 15% 10%, rgba(214, 166, 58, 0.13), transparent 28rem),
+    radial-gradient(circle at 88% 18%, rgba(22, 140, 140, 0.13), transparent 24rem),
+    linear-gradient(rgba(243, 215, 123, 0.025) 1px, transparent 1px);
+}
+
+.hieroglyph-band { position: relative; }
+.hieroglyph-band::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 5px;
+  background: repeating-linear-gradient(90deg, var(--gold) 0 20px, var(--lapis) 20px 40px, var(--turquoise) 40px 60px, var(--sandstone) 60px 80px);
+}
+
+.papyrus-panel {
+  background: rgba(255, 249, 232, 0.9);
+  border: 1px solid rgba(153, 105, 35, 0.28);
+  box-shadow: 0 18px 50px rgba(71, 44, 12, 0.1);
+}
+.dark .papyrus-panel {
+  background: rgba(9, 31, 48, 0.9);
+  border-color: rgba(214, 166, 58, 0.25);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+}
+
+.gold-button {
+  color: #161009;
+  background: linear-gradient(135deg, #f3d77b, #d6a63a 55%, #b47824);
+  box-shadow: 0 10px 28px rgba(180, 120, 36, 0.28);
+}
+.gold-button:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.lapis-button {
+  color: #fff9e8;
+  background: linear-gradient(135deg, #174f82, #0b3159);
+  box-shadow: 0 10px 28px rgba(7, 26, 47, 0.24);
+}
+.egypt-card {
+  border-top: 3px solid var(--gold);
+  background: rgba(255, 249, 232, 0.72);
+}
+.dark .egypt-card { background: rgba(9, 31, 48, 0.72); }
+.sun-disc {
+  background: radial-gradient(circle, #f6df8e 0 28%, #d6a63a 30% 58%, transparent 60%);
+  filter: drop-shadow(0 0 24px rgba(214, 166, 58, 0.4));
+}
+
+@media print { .egypt-shell { background: white; } }

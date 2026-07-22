@@ -16,6 +16,7 @@ _STOP_WORDS = {
     "by",
     "for",
     "from",
+    "how",
     "has",
     "he",
     "in",
@@ -26,11 +27,18 @@ _STOP_WORDS = {
     "on",
     "that",
     "the",
+    "this",
     "to",
     "was",
     "were",
     "will",
     "with",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
 }
 _PROTECTED_NEGATIONS = {"no", "not", "nor", "never"}
 _URL_RE = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)

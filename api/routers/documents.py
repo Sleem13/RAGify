@@ -1,26 +1,34 @@
-"""Document registry, upload, processing, and indexing endpoints."""
+"""Document upload, ingestion status, registry, and deletion endpoints."""
 
-import logging
 from pathlib import Path
+import tempfile
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from api.dependencies import require_api_key
 from core.config import settings
 from services.app_state import app_state
-from services.data_analyzer import data_analyzer
 from services.document_processor import document_processor
+from services.ingestion import ingestion_service
+from services.job_store import job_store
 from services.vector_db import vector_db
 
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Documents"])
 
 
-@router.get("/files")
+@router.get("/files", dependencies=[Depends(require_api_key)])
 def list_files():
     files = app_state.registry.snapshot()
     return {"files": files, "total": len(files)}
+
+
+@router.get("/jobs/{job_id}", dependencies=[Depends(require_api_key)])
+def get_ingestion_job(job_id: str):
+    job = job_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Ingestion job not found.")
+    return job
 
 
 @router.delete("/files/{filename}", dependencies=[Depends(require_api_key)])
@@ -36,92 +44,62 @@ def delete_file(filename: str):
     }
 
 
-@router.post("/upload", dependencies=[Depends(require_api_key)])
+@router.post(
+    "/upload",
+    dependencies=[Depends(require_api_key)],
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def upload_file(file: UploadFile = File(...)):
-    filename = file.filename or "unknown"
+    filename = Path(file.filename or "unknown").name
     extension = Path(filename).suffix.lower()
-    contents = await file.read()
+    supported = extension in settings.excel_extensions or document_processor.is_supported(filename)
+    if not supported:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                f"Unsupported file type '{extension}'. Supported: PDF, DOCX, TXT, PPTX, "
+                "PNG, JPG, JPEG, XLSX, XLS, CSV, JSON."
+            ),
+        )
 
-    if not contents:
+    settings.upload_temp_path.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    size = 0
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            delete=False,
+            suffix=extension,
+            prefix="ragify-upload-",
+            dir=settings.upload_temp_path,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            while chunk := await file.read(settings.upload_chunk_size):
+                size += len(chunk)
+                if size > settings.max_file_size:
+                    limit_mb = settings.max_file_size // 1024 // 1024
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"File too large. Maximum allowed size is {limit_mb} MB.",
+                    )
+                temporary.write(chunk)
+    except Exception:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await file.close()
+
+    if size == 0:
+        temporary_path.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
-    if len(contents) > settings.max_file_size:
-        size_mb = len(contents) / 1024 / 1024
-        limit_mb = settings.max_file_size // 1024 // 1024
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large ({size_mb:.1f} MB). Maximum allowed size is {limit_mb} MB.",
-        )
 
-    if extension in settings.excel_extensions:
-        return await _ingest_spreadsheet(contents, filename)
-    if document_processor.is_supported(filename):
-        return await _ingest_document(contents, filename)
-
-    raise HTTPException(
-        status_code=415,
-        detail=(
-            f"Unsupported file type '{extension}'. Supported: PDF, DOCX, TXT, PPTX, "
-            "PNG, JPG, JPEG, XLSX, XLS, CSV, JSON."
-        ),
-    )
-
-
-async def _ingest_spreadsheet(contents: bytes, filename: str) -> dict:
-    try:
-        analysis = await data_analyzer.analyze_excel(contents, filename)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Analysis error: {exc}") from exc
-
-    try:
-        chunks = await document_processor.process_excel_for_rag(contents, filename)
-        if not chunks:
-            raise ValueError("The spreadsheet did not contain indexable data.")
-        vector_db.replace_file_chunks(chunks, filename=filename)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Indexing error: {exc}") from exc
-
-    metadata = {
-        "type": "excel",
-        "chunks": len(chunks),
-        "charts": len(analysis.get("charts", [])),
-    }
-    app_state.registry.set(filename, metadata)
+    job = ingestion_service.enqueue(temporary_path, filename)
     return {
+        "job_id": job["id"],
         "filename": filename,
-        "status": "analyzed",
-        "type": "excel",
-        "analysis": analysis,
-        "message": (
-            f"'{filename}' was analyzed and indexed. You can ask questions about the data "
-            "and view its dashboard."
-        ),
-    }
-
-
-async def _ingest_document(contents: bytes, filename: str) -> dict:
-    try:
-        chunks = await document_processor.process_file(contents, filename)
-    except ValueError as exc:
-        raise HTTPException(status_code=415, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Processing error: {exc}") from exc
-
-    if not chunks:
-        raise HTTPException(
-            status_code=422,
-            detail="No readable content was found in the uploaded document.",
-        )
-    try:
-        vector_db.replace_file_chunks(chunks, filename=filename)
-    except Exception as exc:
-        logger.exception("Could not index '%s'.", filename)
-        raise HTTPException(status_code=500, detail=f"Indexing error: {exc}") from exc
-
-    app_state.registry.set(filename, {"type": "document", "chunks": len(chunks)})
-    return {
-        "filename": filename,
-        "status": "processed",
-        "type": "document",
-        "chunks": len(chunks),
-        "message": f"'{filename}' was indexed in {len(chunks)} chunks and is ready for questions.",
+        "status": job["status"],
+        "stage": job["stage"],
+        "progress": job["progress"],
+        "message": f"'{filename}' was accepted and is being processed.",
     }

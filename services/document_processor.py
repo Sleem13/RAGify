@@ -65,8 +65,7 @@ class DocumentProcessor:
 
         # ── 3. Advanced PDF Processing (PyMuPDF + Vision for embedded images) ─
         elif ext in PDF_EXTENSIONS:
-            extracted_text = await self._extract_pdf_text_and_images(file_bytes, filename)
-            documents = [Document(page_content=extracted_text, metadata={"source": filename})]
+            documents = await self._extract_pdf_documents(file_bytes, filename)
 
         # ── 4. Standard Document Processing (DOCX, TXT) ───────────────────────
         else:
@@ -100,7 +99,9 @@ class DocumentProcessor:
         )
         return chunks
 
-    async def _extract_pdf_text_and_images(self, file_bytes: bytes, filename: str) -> str:
+    async def _extract_pdf_documents(
+        self, file_bytes: bytes, filename: str
+    ) -> list[Document]:
         """
         Uses PyMuPDF (fitz) to extract text and embedded images from a PDF.
         Sends images to Gemini Vision to describe charts/tables.
@@ -110,29 +111,29 @@ class DocumentProcessor:
         except ImportError:
             raise ValueError("PyMuPDF (fitz) is not installed. Run: pip install pymupdf")
 
-        full_text: list[str] = []
-        image_candidates: list[tuple[int, int, bytes, str]] = []
-        seen_xrefs: set[int] = set()
+        def extract_pages() -> tuple[list[tuple[int, str]], list[tuple[int, int, bytes, str]]]:
+            pages: list[tuple[int, str]] = []
+            candidates: list[tuple[int, int, bytes, str]] = []
+            seen_xrefs: set[int] = set()
+            with fitz.open(stream=file_bytes, filetype="pdf") as pdf_document:
+                for page_num in range(len(pdf_document)):
+                    page = pdf_document.load_page(page_num)
+                    page_text = page.get_text("text").strip()
+                    pages.append((page_num + 1, page_text))
+                    for image in page.get_images(full=True):
+                        xref = image[0]
+                        if xref in seen_xrefs:
+                            continue
+                        seen_xrefs.add(xref)
+                        base_image = pdf_document.extract_image(xref)
+                        image_bytes = base_image["image"]
+                        if len(image_bytes) > 5000:
+                            candidates.append(
+                                (page_num + 1, len(page_text), image_bytes, base_image["ext"])
+                            )
+            return pages, candidates
 
-        with fitz.open(stream=file_bytes, filetype="pdf") as pdf_document:
-            for page_num in range(len(pdf_document)):
-                page = pdf_document.load_page(page_num)
-                page_text = page.get_text("text").strip()
-                full_text.append(f"--- Page {page_num + 1} ---")
-                if page_text:
-                    full_text.append(page_text)
-
-                for image in page.get_images(full=True):
-                    xref = image[0]
-                    if xref in seen_xrefs:
-                        continue
-                    seen_xrefs.add(xref)
-                    base_image = pdf_document.extract_image(xref)
-                    image_bytes = base_image["image"]
-                    if len(image_bytes) > 5000:
-                        image_candidates.append(
-                            (page_num + 1, len(page_text), image_bytes, base_image["ext"])
-                        )
+        pages, image_candidates = await asyncio.to_thread(extract_pages)
 
         image_candidates.sort(key=lambda item: (item[1] >= 120, -len(item[2])))
         selected_images = image_candidates[: self.max_pdf_images]
@@ -159,17 +160,31 @@ class DocumentProcessor:
                 logger.warning("Image analysis failed on page %s: %s", page_number, exc)
                 return page_number, ""
 
+        vision_by_page: dict[int, list[str]] = {}
         if selected_images:
             vision_results = await asyncio.gather(
                 *(analyze_image(candidate) for candidate in selected_images)
             )
             for page_number, vision_text in vision_results:
                 if vision_text:
-                    full_text.append(
-                        f"\n[Image/Chart detected on page {page_number}]:\n{vision_text}\n"
-                    )
+                    vision_by_page.setdefault(page_number, []).append(vision_text)
 
-        return "\n".join(full_text)
+        documents: list[Document] = []
+        for page_number, page_text in pages:
+            parts = [page_text]
+            parts.extend(
+                f"[Image or chart on this page]\n{vision_text}"
+                for vision_text in vision_by_page.get(page_number, [])
+            )
+            content = "\n\n".join(part for part in parts if part.strip()).strip()
+            if content:
+                documents.append(
+                    Document(
+                        page_content=content,
+                        metadata={"source": filename, "page": page_number},
+                    )
+                )
+        return documents
 
     async def _extract_image_text(self, file_bytes: bytes, ext: str) -> str:
         """Extract text from an image using Gemini Vision."""

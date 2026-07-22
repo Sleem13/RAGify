@@ -1,0 +1,20 @@
+[
+  {
+    "question": "What is a GAN and how is it trained?",
+    "expected_source": "Lec7 LLM vs. GAN LMS.pdf",
+    "expected_pages": [56, 73],
+    "must_answer": true
+  },
+  {
+    "question": "What role does the discriminator play in a GAN?",
+    "expected_source": "Lec7 LLM vs. GAN LMS.pdf",
+    "expected_pages": [56, 73],
+    "must_answer": true
+  },
+  {
+    "question": "What is the university parking refund policy?",
+    "expected_source": null,
+    "expected_pages": [],
+    "must_answer": false
+  }
+]

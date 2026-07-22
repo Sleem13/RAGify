@@ -37,6 +37,9 @@ chroma_db/
 *.pkl
 vectorstore/
 *.faiss
+data/api_keys.json
+data/ingestion_jobs.json
+data/uploads/
 
 # ── Binary executables & tools (never commit) ─────────────────────────────────
 *.exe

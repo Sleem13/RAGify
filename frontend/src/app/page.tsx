@@ -1,232 +1,118 @@
 "use client";
+
 import Link from 'next/link';
+import { ArrowRight, BarChart3, BookOpen, CheckCircle2, MessageSquareText, ScrollText, Search, ShieldCheck, Sparkles } from 'lucide-react';
+import { BrandMark } from '@/components/BrandMark';
+import { ThemeControls } from '@/components/ThemeControls';
 import { useAppContext } from '@/context/AppContext';
-import { Moon, Sun, Languages, ArrowRight, Upload, MessageSquare, BarChart3, Zap, Shield, Globe, CheckCircle } from 'lucide-react';
 
 export default function Home() {
-  const { t, theme, toggleTheme, language, toggleLanguage } = useAppContext();
-
+  const { t } = useAppContext();
   const features = [
-    {
-      icon: <Upload className="w-7 h-7" />,
-      color: "from-indigo-500 to-blue-500",
-      bg: "bg-indigo-500/10 dark:bg-indigo-500/15",
-      title: t('feature1Title'),
-      desc: t('feature1Desc'),
-    },
-    {
-      icon: <BarChart3 className="w-7 h-7" />,
-      color: "from-purple-500 to-pink-500",
-      bg: "bg-purple-500/10 dark:bg-purple-500/15",
-      title: t('feature2Title'),
-      desc: t('feature2Desc'),
-    },
-    {
-      icon: <Zap className="w-7 h-7" />,
-      color: "from-amber-500 to-orange-500",
-      bg: "bg-amber-500/10 dark:bg-amber-500/15",
-      title: t('feature3Title'),
-      desc: t('feature3Desc'),
-    },
-    {
-      icon: <MessageSquare className="w-7 h-7" />,
-      color: "from-emerald-500 to-teal-500",
-      bg: "bg-emerald-500/10 dark:bg-emerald-500/15",
-      title: t('feature4Title'),
-      desc: t('feature4Desc'),
-    },
-    {
-      icon: <Shield className="w-7 h-7" />,
-      color: "from-rose-500 to-red-500",
-      bg: "bg-rose-500/10 dark:bg-rose-500/15",
-      title: t('feature5Title'),
-      desc: t('feature5Desc'),
-    },
-    {
-      icon: <Globe className="w-7 h-7" />,
-      color: "from-sky-500 to-cyan-500",
-      bg: "bg-sky-500/10 dark:bg-sky-500/15",
-      title: t('feature6Title'),
-      desc: t('feature6Desc'),
-    },
+    { icon: ScrollText, title: t('feature1Title'), desc: t('feature1Desc') },
+    { icon: BarChart3, title: t('feature2Title'), desc: t('feature2Desc') },
+    { icon: Search, title: 'Cited discovery', desc: 'Trace every answer back to its document and PDF page.' },
+    { icon: MessageSquareText, title: t('feature4Title'), desc: t('feature4Desc') },
+    { icon: ShieldCheck, title: t('feature5Title'), desc: t('feature5Desc') },
+    { icon: Sparkles, title: t('feature6Title'), desc: t('feature6Desc') },
   ];
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0a0a0f] text-slate-900 dark:text-white font-sans transition-colors duration-300 overflow-x-hidden">
-
-      {/* Background Glow */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
-        <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-indigo-500/10 dark:bg-indigo-500/5 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-[600px] h-[600px] bg-purple-500/10 dark:bg-purple-500/5 rounded-full blur-3xl" />
-      </div>
-
-      {/* Navbar */}
-      <nav className="border-b border-gray-100 dark:border-white/5 bg-white/80 dark:bg-black/30 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-              <span className="text-white font-bold text-sm">R</span>
-            </div>
-            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400">
-              RAGify
-            </span>
+    <main className="egypt-shell min-h-screen overflow-hidden text-[#20180f] dark:text-[#f8eccf]">
+      <nav className="hieroglyph-band sticky top-0 z-50 border-b border-[#b98332]/25 bg-[#fff9e8]/90 backdrop-blur-xl dark:bg-[#061521]/90">
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
+          <BrandMark />
+          <div className="hidden items-center gap-8 text-sm font-semibold text-[#765326] md:flex">
+            <a href="#journey" className="hover:text-[#123c69] dark:text-[#d6bd83] dark:hover:text-[#f3d77b]">The journey</a>
+            <a href="#features" className="hover:text-[#123c69] dark:text-[#d6bd83] dark:hover:text-[#f3d77b]">The collection</a>
           </div>
-
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600 dark:text-gray-400">
-            <a href="#features" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{t('navFeatures')}</a>
-            <a href="#how" className="hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">{t('navHow')}</a>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={toggleLanguage}
-              className="p-2 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors text-gray-600 dark:text-gray-400 flex items-center gap-1.5 text-sm font-medium"
-            >
-              <Languages className="w-4 h-4" />
-              {language === 'en' ? 'عربي' : 'EN'}
-            </button>
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 transition-colors text-gray-600 dark:text-gray-400"
-            >
-              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <Link
-              href="/dashboard"
-              className="ms-2 px-5 py-2 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-colors shadow-lg shadow-indigo-500/25 flex items-center gap-1.5"
-            >
-              {t('getStarted')} <ArrowRight className="w-4 h-4" />
+          <div className="flex items-center gap-3">
+            <ThemeControls />
+            <Link href="/dashboard" className="gold-button hidden rounded-full px-5 py-2.5 text-sm font-bold transition sm:inline-flex">
+              Enter the archive
             </Link>
           </div>
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="max-w-7xl mx-auto px-6 pt-28 pb-20 text-center">
-        <div className="inline-flex items-center gap-2 mb-6 px-4 py-1.5 rounded-full border border-indigo-500/30 bg-indigo-500/5 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-sm font-medium">
-          <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-          {t('heroTag')}
-        </div>
-        <h1 className="text-5xl md:text-7xl font-extrabold mb-6 tracking-tight leading-[1.1]">
-          {t('titleLine1')}
-          <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
-            {t('titleLine2')}
-          </span>
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-          {t('description')}
-        </p>
-
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Link
-            href="/dashboard"
-            className="px-8 py-4 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-lg shadow-xl shadow-indigo-500/30 hover:shadow-indigo-500/50 hover:scale-105 transition-all duration-200 flex items-center gap-2"
-          >
-            {t('tryForFree')} <ArrowRight className="w-5 h-5" />
-          </Link>
-          <a href="#features" className="px-8 py-4 rounded-full border border-gray-300 dark:border-white/10 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-white/5 transition-colors text-lg">
-            {t('learnMore')}
-          </a>
-        </div>
-
-        {/* Stats */}
-        <div className="flex flex-wrap justify-center gap-12 mt-20">
-          {[
-            { value: "100%", label: t('statLocal') },
-            { value: "2+", label: t('statModels') },
-            { value: "∞", label: t('statFiles') },
-          ].map((stat, i) => (
-            <div key={i} className="text-center">
-              <div className="text-4xl font-black text-slate-900 dark:text-white mb-1">{stat.value}</div>
-              <div className="text-gray-500 dark:text-gray-400 text-sm">{stat.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section id="how" className="max-w-7xl mx-auto px-6 py-20">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-extrabold mb-4 text-slate-900 dark:text-white">{t('howTitle')}</h2>
-          <p className="text-gray-500 dark:text-gray-400 max-w-xl mx-auto">{t('howSubtitle')}</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[
-            { step: "01", title: t('step1Title'), desc: t('step1Desc'), icon: <Upload className="w-6 h-6" /> },
-            { step: "02", title: t('step2Title'), desc: t('step2Desc'), icon: <Zap className="w-6 h-6" /> },
-            { step: "03", title: t('step3Title'), desc: t('step3Desc'), icon: <MessageSquare className="w-6 h-6" /> },
-          ].map((item, i) => (
-            <div key={i} className="relative p-8 rounded-2xl bg-gray-50 dark:bg-white/3 border border-gray-200 dark:border-white/8 overflow-hidden group hover:border-indigo-500/40 dark:hover:border-indigo-500/40 transition-all duration-300">
-              <div className="absolute top-4 end-4 text-6xl font-black text-gray-100 dark:text-white/5 group-hover:text-indigo-500/10 transition-colors">
-                {item.step}
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/15 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-5">
-                {item.icon}
-              </div>
-              <h3 className="text-lg font-bold mb-2 text-slate-900 dark:text-white">{item.title}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">{item.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="features" className="max-w-7xl mx-auto px-6 py-20">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl font-extrabold mb-4 text-slate-900 dark:text-white">{t('featuresTitle')}</h2>
-          <p className="text-gray-500 dark:text-gray-400 max-w-xl mx-auto">{t('featuresSubtitle')}</p>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {features.map((f, i) => (
-            <div key={i} className={`p-7 rounded-2xl ${f.bg} border border-gray-200 dark:border-white/8 hover:scale-[1.02] transition-transform duration-200`}>
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${f.color} flex items-center justify-center text-white mb-5 shadow-lg`}>
-                {f.icon}
-              </div>
-              <h3 className="text-lg font-bold mb-2 text-slate-900 dark:text-white">{f.title}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">{f.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="max-w-7xl mx-auto px-6 py-20">
-        <div className="rounded-3xl bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-12 text-center relative overflow-hidden shadow-2xl shadow-indigo-500/30">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNCI+PHBhdGggZD0iTTM2IDM0djZoNnYtNmgtNnptNiA2djZoNnYtNmgtNnptLTYgMHY2aDZ2LTZoLTZ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-50" />
-          <div className="relative">
-            <h2 className="text-3xl md:text-5xl font-extrabold text-white mb-4">{t('ctaTitle')}</h2>
-            <p className="text-white/80 text-lg mb-8 max-w-xl mx-auto">{t('ctaSubtitle')}</p>
-            <div className="flex flex-wrap justify-center gap-3 mb-8">
-              {[t('ctaBenefit1'), t('ctaBenefit2'), t('ctaBenefit3')].map((b, i) => (
-                <div key={i} className="flex items-center gap-2 bg-white/15 rounded-full px-4 py-2 text-white text-sm font-medium">
-                  <CheckCircle className="w-4 h-4" /> {b}
-                </div>
-              ))}
-            </div>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-2 px-10 py-4 bg-white text-indigo-700 font-bold text-lg rounded-full hover:bg-gray-50 transition-colors shadow-xl"
-            >
-              {t('tryForFree')} <ArrowRight className="w-5 h-5" />
+      <section className="relative mx-auto grid min-h-[720px] max-w-7xl items-center gap-12 px-6 py-20 lg:grid-cols-[1.1fr_.9fr]">
+        <div className="relative z-10">
+          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#d6a63a]/45 bg-[#fff9e8]/70 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-[#8a6024] dark:bg-[#0b2840]/70 dark:text-[#f3d77b]">
+            <BookOpen className="h-4 w-4" /> Ancient knowledge · modern intelligence
+          </div>
+          <h1 className="display-font max-w-4xl text-5xl font-bold leading-[1.02] text-[#123c69] dark:text-[#f8eccf] md:text-7xl">
+            Unearth the wisdom
+            <span className="mt-2 block text-[#b37b25] dark:text-[#f3d77b]">inside your documents.</span>
+          </h1>
+          <p className="mt-7 max-w-2xl text-lg leading-8 text-[#684e2e] dark:text-[#d8c8a7]">
+            A digital House of Knowledge for PDFs, manuscripts, reports, and data. Upload a collection, ask precise questions, and receive grounded answers with page-level citations.
+          </p>
+          <div className="mt-10 flex flex-wrap gap-4">
+            <Link href="/dashboard" className="gold-button inline-flex items-center gap-2 rounded-full px-7 py-4 font-bold transition">
+              Begin your research <ArrowRight className="h-5 w-5" />
             </Link>
+            <a href="#journey" className="inline-flex items-center rounded-full border border-[#123c69]/25 bg-[#fff9e8]/60 px-7 py-4 font-bold text-[#123c69] transition hover:border-[#d6a63a] dark:bg-[#0b2840]/60 dark:text-[#f8eccf]">
+              Explore the process
+            </a>
+          </div>
+          <div className="mt-12 flex flex-wrap gap-x-8 gap-y-3 text-sm text-[#75572f] dark:text-[#cfbc94]">
+            {['Local FAISS index', 'Page-level sources', 'English & Arabic'].map(item => (
+              <span key={item} className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-[#168c8c]" />{item}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative mx-auto h-[480px] w-full max-w-[500px]">
+          <div className="sun-disc absolute left-1/2 top-4 h-52 w-52 -translate-x-1/2" />
+          <div className="absolute bottom-0 left-1/2 h-0 w-0 -translate-x-1/2 border-b-[310px] border-l-[220px] border-r-[220px] border-b-[#c9964b] border-l-transparent border-r-transparent drop-shadow-[0_28px_30px_rgba(66,39,10,.25)]" />
+          <div className="absolute bottom-0 left-1/2 h-0 w-0 -translate-x-1/2 translate-y-2 border-b-[250px] border-l-[177px] border-r-[177px] border-b-[#dfb568] border-l-transparent border-r-transparent opacity-75" />
+          <div className="papyrus-panel absolute bottom-12 left-1/2 w-[78%] -translate-x-1/2 rounded-2xl p-6 backdrop-blur">
+            <div className="mb-4 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-[#8a6024] dark:text-[#d6bd83]"><span>Archive query</span><Sparkles className="h-4 w-4 text-[#168c8c]" /></div>
+            <p className="display-font text-lg font-bold text-[#123c69] dark:text-[#f3d77b]">“What distinguishes an LLM from a GAN?”</p>
+            <div className="mt-5 space-y-2">
+              <div className="h-2 w-full rounded bg-[#d6a63a]/25" /><div className="h-2 w-[88%] rounded bg-[#d6a63a]/20" /><div className="h-2 w-[64%] rounded bg-[#168c8c]/25" />
+            </div>
+            <div className="mt-5 rounded-lg border border-[#168c8c]/25 bg-[#168c8c]/10 px-3 py-2 text-xs font-semibold text-[#126d6d] dark:text-[#77d1cf]">Source: lecture.pdf · page 17</div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-100 dark:border-white/5 py-10">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">R</span>
-            </div>
-            <span className="font-bold text-slate-900 dark:text-white">RAGify</span>
+      <section id="journey" className="border-y border-[#b98332]/20 bg-[#123c69] px-6 py-20 text-[#fff9e8]">
+        <div className="mx-auto max-w-7xl">
+          <p className="text-center text-xs font-bold uppercase tracking-[0.3em] text-[#f3d77b]">From scroll to insight</p>
+          <h2 className="display-font mt-3 text-center text-4xl font-bold">A three-stage research journey</h2>
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
+            {[
+              ['01', 'Place it in the archive', 'Upload documents and datasets through a resilient background ingestion queue.'],
+              ['02', 'Map the knowledge', 'Text is normalized, embedded, and indexed with page-aware metadata.'],
+              ['03', 'Question the collection', 'Hybrid retrieval finds evidence and the assistant answers with citations.'],
+            ].map(([step, title, desc]) => (
+              <article key={step} className="rounded-2xl border border-[#f3d77b]/20 bg-white/5 p-7">
+                <span className="display-font text-4xl font-bold text-[#d6a63a]">{step}</span>
+                <h3 className="display-font mt-5 text-xl font-bold">{title}</h3>
+                <p className="mt-3 leading-7 text-[#d7c9aa]">{desc}</p>
+              </article>
+            ))}
           </div>
-          <p className="text-gray-400 text-sm">{t('footerText')}</p>
         </div>
-      </footer>
+      </section>
 
-    </div>
+      <section id="features" className="mx-auto max-w-7xl px-6 py-24">
+        <div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[0.3em] text-[#a46d1f] dark:text-[#f3d77b]">The collection</p><h2 className="display-font mt-3 text-4xl font-bold text-[#123c69] dark:text-[#f8eccf]">Tools worthy of a modern scribe</h2></div>
+        <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {features.map(({ icon: Icon, title, desc }) => (
+            <article key={title} className="egypt-card rounded-2xl border border-[#b98332]/20 p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
+              <div className="grid h-12 w-12 place-items-center rounded-full bg-[#123c69] text-[#f3d77b]"><Icon className="h-6 w-6" /></div>
+              <h3 className="display-font mt-5 text-xl font-bold text-[#123c69] dark:text-[#f3d77b]">{title}</h3>
+              <p className="mt-3 text-sm leading-7 text-[#6c5233] dark:text-[#cfbf9f]">{desc}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <footer className="hieroglyph-band border-t border-[#b98332]/20 bg-[#fff9e8]/70 px-6 py-10 dark:bg-[#071a2f]">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-5 sm:flex-row"><BrandMark /><p className="text-sm text-[#795c37] dark:text-[#c7b58f]">Built in Egypt’s spirit of preserving and sharing knowledge.</p></div>
+      </footer>
+    </main>
   );
 }

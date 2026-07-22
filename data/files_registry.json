@@ -1,6 +1,24 @@
 {
   "Lec7 LLM vs. GAN LMS.pdf": {
     "type": "document",
-    "chunks": 31
+    "chunks": 75
+  },
+  "PL300_Questions_List-1 (1).xlsx": {
+    "type": "excel",
+    "chunks": 9,
+    "charts": 0
+  },
+  "AurumAI_Professional.docx": {
+    "type": "document",
+    "chunks": 18
+  },
+  "Quiz DL.pdf": {
+    "type": "document",
+    "chunks": 1
+  },
+  "fitness_poses_csvs_out_full_list.csv": {
+    "type": "excel",
+    "chunks": 172,
+    "charts": 2
   }
 }

@@ -53,12 +53,14 @@ def build_context(
     for number, match in enumerate(selected, start=1):
         metadata = match.get("metadata") or {}
         source = str(metadata.get("source") or "Unknown source")
+        page = metadata.get("page")
         label = f"[Source {number}]"
-        blocks.append(f"{label} {source}\n{match['text']}")
+        location = f"{source}, page {page}" if page else source
+        blocks.append(f"{label} {location}\n{match['text']}")
         public_sources.append(
             {
                 "id": number,
-                "title": source,
+                "title": location,
                 "text": match["text"],
                 "score": round(float(match.get("score", 0.0)), 4),
                 "metadata": metadata,

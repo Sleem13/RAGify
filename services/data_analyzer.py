@@ -3,6 +3,7 @@ import tempfile
 import os
 import logging
 import json
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,9 @@ class DataAnalyzer:
     """
 
     async def analyze_excel(self, file_bytes: bytes, filename: str) -> dict:
+        return await asyncio.to_thread(self._analyze_excel_sync, file_bytes, filename)
+
+    def _analyze_excel_sync(self, file_bytes: bytes, filename: str) -> dict:
         ext = os.path.splitext(filename)[1].lower()
         temp_file_path = None
 
