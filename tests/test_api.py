@@ -89,15 +89,23 @@ class ApiKeyStoreTests(unittest.TestCase):
     def test_store_is_open_until_a_key_is_generated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "keys.json"
-            store = ApiKeyStore(path)
+            store = ApiKeyStore(path, environment_key="")
             self.assertTrue(store.verify(None))
             key = store.generate()
             self.assertFalse(store.verify(None))
             self.assertTrue(store.verify(key))
             self.assertFalse(key in path.read_text(encoding="utf-8"))
-            self.assertTrue(ApiKeyStore(path).verify(key))
+            self.assertTrue(ApiKeyStore(path, environment_key="").verify(key))
             self.assertTrue(store.revoke(key))
             self.assertTrue(store.verify(None))
+
+    def test_environment_key_protects_an_empty_store(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "keys.json"
+            store = ApiKeyStore(path, environment_key="codespaces-secret")
+            self.assertFalse(store.verify(None))
+            self.assertFalse(store.verify("wrong-secret"))
+            self.assertTrue(store.verify("codespaces-secret"))
 
 
 class ExtractedServiceTests(unittest.TestCase):

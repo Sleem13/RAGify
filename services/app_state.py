@@ -80,12 +80,24 @@ class FileRegistry:
 
 
 class ApiKeyStore:
-    """Persist only API-key digests; an empty store intentionally means open mode."""
+    """Validate an environment key and persist only generated API-key digests."""
 
-    def __init__(self, path: Path = settings.api_keys_path):
+    def __init__(
+        self,
+        path: Path = settings.api_keys_path,
+        environment_key: str | None = None,
+    ):
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._keys: dict[str, dict[str, str]] = self._load()
+        configured_key = (
+            os.getenv("RAGIFY_API_KEY", "")
+            if environment_key is None
+            else environment_key
+        )
+        self._environment_key_digest = (
+            self._digest(configured_key.strip()) if configured_key.strip() else None
+        )
         self._lock = threading.RLock()
 
     @staticmethod
@@ -122,7 +134,19 @@ class ApiKeyStore:
 
     def verify(self, candidate: str | None) -> bool:
         with self._lock:
-            return not self._keys or bool(candidate and self._digest(candidate) in self._keys)
+            if not self._environment_key_digest and not self._keys:
+                return True
+            if not candidate:
+                return False
+            candidate_digest = self._digest(candidate)
+            environment_match = bool(
+                self._environment_key_digest
+                and secrets.compare_digest(
+                    candidate_digest,
+                    self._environment_key_digest,
+                )
+            )
+            return environment_match or candidate_digest in self._keys
 
     def masked(self) -> list[str]:
         with self._lock:

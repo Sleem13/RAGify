@@ -1,10 +1,15 @@
 import json
 import os
 import time
+from pathlib import Path
 from typing import Any
 
 import requests
 import streamlit as st
+from dotenv import load_dotenv
+
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 st.set_page_config(
     page_title="RAGify · House of Knowledge",
@@ -145,7 +150,12 @@ def list_indexed_files() -> tuple[list[dict[str, Any]], str | None]:
         payload = response.json()
         files = payload.get("files", {})
         return [{"name": name, **meta} for name, meta in files.items()], None
-    return [], f"Could not load files: HTTP {response.status_code}"
+    try:
+        detail = response.json().get("detail", response.text)
+    except ValueError:
+        detail = response.text
+    suffix = f": {detail}" if detail else ""
+    return [], f"Could not load files: HTTP {response.status_code}{suffix}"
 
 
 def ask_question(

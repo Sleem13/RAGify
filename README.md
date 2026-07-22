@@ -47,6 +47,14 @@ Add your provider key(s) to `.env`, then start the backend:
 uvicorn main:app --reload --host 127.0.0.1 --port 9999
 ```
 
+To protect the API, set `RAGIFY_API_KEY` in `.env` to a long random value. The
+Streamlit interface and backend both load this value, so no separate key entry is
+needed when they run from the same checkout. Generate a suitable value with:
+
+```powershell
+python -c "import secrets; print('ragify-' + secrets.token_urlsafe(32))"
+```
+
 In a second PowerShell terminal, start the Next.js frontend:
 
 ```powershell
@@ -72,6 +80,14 @@ streamlit run app.py
 ```
 
 The Streamlit app defaults to `http://localhost:9999`. Override it with `RAGIFY_BACKEND_URL` if needed.
+
+### GitHub Codespaces
+
+Create Codespaces secrets named `GEMINI_API_KEY` or `GROQ_API_KEY` and,
+optionally, `RAGIFY_API_KEY`. Export them into the terminals that start the
+backend and Streamlit, or copy `.env.example` to `.env` and fill in the same
+values. When using a separately deployed backend, configure the identical
+`RAGIFY_API_KEY` on that service and in the Streamlit environment.
 
 ## Verify changes
 
